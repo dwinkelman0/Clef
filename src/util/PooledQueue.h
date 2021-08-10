@@ -10,6 +10,7 @@
  * lastIndex_, the queue is considered to be empty, so it is not possible for
  * all N elements to be simultaneously occupied.
  */
+namespace Clef::Util {
 template <typename T, uint16_t N>
 class PooledQueue {
  public:
@@ -139,3 +140,4 @@ class PooledQueue {
   uint16_t lastIndex_ = 0; /*!< Index + 1 of the last item in the queue; indices
                           are in the range [0, N) */
 };
+}  // namespace Clef::Util

@@ -4,6 +4,7 @@
 
 #include "util/PooledQueue.h"
 
+namespace {
 struct Dummy {
   uint16_t x;
   uint16_t y;
@@ -11,7 +12,9 @@ struct Dummy {
     return x == other.x && y == other.y;
   }
 };
+}  // namespace
 
+namespace Clef::Util {
 TEST(PooledQueue, ZeroSize) {
   PooledQueue<Dummy, 8> queue;
   ASSERT_EQ(queue.size(), 0);
@@ -84,3 +87,4 @@ TEST(PooledQueue, Pop) {
   ASSERT_FALSE(queue.pop());
   ASSERT_EQ(queue.size(), 0);
 }
+}  // namespace Clef::Util
