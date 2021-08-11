@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 
+#include "../../util/Units.h"
 #include "../hw/Register.h"
 
 namespace Clef::If::Sw {
@@ -12,41 +13,21 @@ namespace Clef::If::Sw {
  */
 template <uint32_t USTEPS_PER_MM>
 class Axis {
+ private:
+  using PositionUnit = Clef::Util::PositionUnit;
+  using TimeUnit = Clef::Util::TimeUnit;
+
  public:
-  enum class PositionUnit { USTEPS, MMS };
-  enum class TimeUnit { MIN, SEC, MSEC, USEC };
-
-  /**
-   * Offer a variety of parametrizations for position of the axis.
-   */
   template <typename DType, PositionUnit PositionU>
-  class Position {
-   public:
-    constexpr Position(DType position) : position_(position) {}
-    inline constexpr DType operator*() const { return position_; }
-
-   private:
-    DType position_;
-  };
-
-  /**
-   * Offer a variety of parametrizations for feedrate of the axis.
-   */
+  using Position = Clef::Util::Position<DType, PositionU, USTEPS_PER_MM>;
   template <typename DType, PositionUnit PositionU, TimeUnit TimeU>
-  class Feedrate {
-   public:
-    constexpr Feedrate(DType feedrate) : feedrate_(feedrate) {}
-    inline constexpr DType operator*() const { return feedrate_; }
-
-   private:
-    DType feedrate_;
-  };
+  using Feedrate = Clef::Util::Feedrate<DType, PositionU, TimeU, USTEPS_PER_MM>;
 
   /**
-   * Abstract representation of the direction of the stepper motor associated
-   * with this axis.
+   * Abstract representation of the direction of the stepper motor
+   * associated with this axis.
    */
-  class DirectionRegister : protected RWRegister<uint8_t> {
+  class StepperDirectionRegister : protected RWRegister<uint8_t> {
     inline void setIncreasing() { write(1); }
     inline void setDecreasing() { write(0); }
     inline void getIsIncreasing() { return read(); }
@@ -65,13 +46,17 @@ class Axis {
     inline void setResolution(const Resolution resolution) {
       write(reinterpret_cast<uint8_t>(resolution));
     }
-    inline Position<uint8_t, PositionUnit::USTEPS> getMicrostepsPerPulse()
+    inline Position<int32_t, PositionUnit::USTEP> getMicrostepsPerPulse()
         const {
       return 1 << read();
     }
   };
 
-  void init() { directionRegister_.setIncreasing(); }
+  void init() {
+    stepperDirectionRegister_.setIncreasing();
+    stepperResolutionRegister_.setResolution(
+        StepperResolutionRegister::Resolution::_1);
+  }
 
   /**
    * Reserve the axis so that the underlying resources are available for an
@@ -89,13 +74,18 @@ class Axis {
    */
   virtual void releaseAll() = 0;
 
-  virtual void setTargetPos(const Position<int32_t, Unit::USTEPS> pos) = 0;
-  virtual Position<int32_t, Unit::USTEPS> getCurrentPos() const = 0;
+  virtual void setTargetPos(
+      const Position<int32_t, PositionUnit::USTEPS> pos) = 0;
+  virtual Position<int32_t, PositionUnit::USTEPS> getCurrentPos() const = 0;
   virtual void setFeedrate(
-      const Feedrate<int32_t, Unit::USTEPS, Unit::MIN> feedrate) = 0;
+      const Feedrate<int32_t, PositionUnit::USTEPS, TimeUnit::MIN>
+          feedrate) = 0;
 
  private:
-  DirectionRegister
-      directionRegister_; /*!< Direction state of the stepper motor */
+  StepperDirectionRegister
+      stepperDirectionRegister_; /*!< Direction state of the stepper motor */
+  StepperResolutionRegister
+      stepperResolutionRegister_; /*!< Resolution state of the stepper motor
+                                     driver */
 };
 }  // namespace Clef::If::Sw
