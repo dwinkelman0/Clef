@@ -40,7 +40,7 @@ class Axis {
   class StepperResolutionRegister : protected RWRegister<uint8_t> {
     /**
      * Possible resolution values for the DRV8825 stepper motor driver; these
-     * values are microsteps per pulse.
+     * values are microsteps per step (_32 is the best resolution).
      */
     enum class Resolution { _1 = 0, _2 = 1, _4 = 2, _8 = 3, _16 = 4, _32 = 5 };
     inline void setResolution(const Resolution resolution) {

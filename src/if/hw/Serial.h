@@ -19,8 +19,9 @@ class RSerial {
 class WSerial {
  public:
   virtual void init() = 0;
-  virtual bool readyToWrite() const = 0;
-  virtual bool write(const char c) = 0;
+  virtual void writeChar(const char c) = 0;
+  virtual void writeStr(const char *str) = 0;
+  virtual void writeLine(const char *line) = 0;
 };
 
 /**
