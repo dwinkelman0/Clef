@@ -2,12 +2,11 @@
 
 #pragma once
 
+#include <if/PwmTimer.h>
+#include <if/Register.h>
 #include <stdint.h>
 
-#include "../../util/Units.h"
-#include "../hw/Register.h"
-
-namespace Clef::If::Sw {
+namespace Clef::If {
 /**
  * Abstraction of an axis, cartesian or otherwise.
  */
@@ -88,4 +87,4 @@ class Axis {
       stepperResolutionRegister_; /*!< Resolution state of the stepper motor
                                      driver */
 };
-}  // namespace Clef::If::Sw
+}  // namespace Clef::If

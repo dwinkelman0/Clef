@@ -2,7 +2,7 @@
 
 #pragma once
 
-namespace Clef::If::Hw {
+namespace Clef::If {
 /**
  * Abstraction of a timer that generates interrupts on its rising and falling
  * edges. It is parametrized in terms of frequency and duty-cycle. The timer can
@@ -27,4 +27,4 @@ class PwmTimer {
   virtual void setRisingEdgeCb(void (*cb)(void *), void *data) = 0;
   virtual void setFallingEdgeCb(void (*cb)(void *), void *data) = 0;
 };
-}  // namespace Clef::If::Hw
+}  // namespace Clef::If

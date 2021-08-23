@@ -2,18 +2,23 @@
 
 #pragma once
 
+#include <if/Serial.h>
 #include <stdint.h>
 
-#include "../../../if/hw/Serial.h"
-
-namespace Clef::Impl::Hw::Atmega2560 {
-class Usart : public Clef::If::Hw::RWSerial {
+namespace Clef::Impl::Atmega2560 {
+class Usart : public Clef::If::RWSerial {
  public:
   void init() override;
-  bool readyToRead() const override;
+  bool isReadyToRead() const override;
   bool read(char *const c) override;
   void writeChar(const char c) override;
   void writeStr(const char *str) override;
   void writeLine(const char *line) override;
+
+ private:
+  /**
+   * Prevent multiple initializations.
+   */
+  bool isInitialized_ = false;
 };
-}  // namespace Clef::Impl::Hw::Atmega2560
+}  // namespace Clef::Impl::Atmega2560

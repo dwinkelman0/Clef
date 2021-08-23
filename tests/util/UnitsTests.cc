@@ -1,11 +1,10 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
 #include <gtest/gtest.h>
-
-#include "util/Units.h"
+#include <util/Units.h>
 
 namespace Clef::Util {
-TEST(Units, TimeConversions) {
+TEST(UnitsTest, TimeConversions) {
   Time<int64_t, TimeUnit::MIN> mins(3);
   Time<int64_t, TimeUnit::SEC> secs(mins);
   Time<int64_t, TimeUnit::USEC> usecs(secs);
@@ -16,7 +15,7 @@ TEST(Units, TimeConversions) {
   ASSERT_EQ(mins, (Time<int64_t, TimeUnit::MIN>(secs)));
 }
 
-TEST(Units, FrequencyConversions) {
+TEST(UnitsTest, FrequencyConversions) {
   Time<float, TimeUnit::SEC> secs(0.001);
   Frequency<float> freq = secs.asFrequency();
   ASSERT_FLOAT_EQ(*freq, 1000.0f);
@@ -27,14 +26,14 @@ TEST(Units, FrequencyConversions) {
   ASSERT_FLOAT_EQ(*freq2, 1000.0f);
 }
 
-TEST(Units, PositionConversions) {
+TEST(UnitsTest, PositionConversions) {
   Position<float, PositionUnit::MM, 400> mms(5);
   Position<float, PositionUnit::USTEP, 400> usteps(mms);
   ASSERT_EQ(*usteps, 2000);
   ASSERT_EQ(mms, (Position<float, PositionUnit::MM, 400>(usteps)));
 }
 
-TEST(Units, FeedrateConversions) {
+TEST(UnitsTest, FeedrateConversions) {
   Feedrate<float, PositionUnit::MM, TimeUnit::MIN, 400> fr(1200);
   ASSERT_EQ(*fr, 1200);
   Time<float, TimeUnit::SEC> secs(Position<float, PositionUnit::MM, 400>(100) /

@@ -2,7 +2,7 @@
 
 #pragma once
 
-namespace Clef::If::Hw {
+namespace Clef::If {
 
 /**
  * Abstraction of a read-only register.
@@ -27,4 +27,4 @@ class WRegister {
  */
 template <typename DType>
 class RWRegister : public RRegister, public WRegister {};
-}  // namespace Clef::If::Hw
+}  // namespace Clef::If

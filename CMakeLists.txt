@@ -7,10 +7,12 @@ set (CMAKE_CXX_STANDARD 17)
 
 # Define targets
 project (Clef C CXX)
-set (Target_util_tests clef-util-tests)
+set (Target_tests clef-tests)
 set (Target_fw_atmega2560 clef-atmega2560)
 
 include_directories (src)
+
+file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc)
 
 if (${CLEF_TARGET} MATCHES "atmega2560")
     # Build Atmega2560 firmware
@@ -36,10 +38,10 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
     file (
         GLOB FW_ATMEGA2560_SOURCES
         src/fw/main.atmega2560.cc
-        src/impl/hw/atmega2560/*.cc
-        src/impl/hw/atmega2560/usart/*.c
+        src/impl/atmega2560/*.cc
+        src/impl/atmega2560/usart/*.c
     )
-    add_executable (${elf_file} ${FW_ATMEGA2560_SOURCES})
+    add_executable (${elf_file} ${FW_ATMEGA2560_SOURCES} ${FW_COMMON_IF_SOURCES})
     set_target_properties (
         ${elf_file}
         PROPERTIES
@@ -110,13 +112,15 @@ else ()
     # Set up include directories
     include_directories (${googletest_SOURCE_DIR}/googletest/include)
 
-    # Util testing target
-    file (GLOB UTIL_TESTS_SOURCES tests/main.cc tests/util/*.cc)
-    add_executable (${Target_util_tests} ${UTIL_TESTS_SOURCES})
-    target_link_libraries (${Target_util_tests} gtest_main)
+    file (GLOB FW_EMULATOR_IF_SOURCES src/impl/emulator/*.cc)
+
+    # Tests target
+    file (GLOB TESTS_SOURCES tests/main.cc tests/util/*.cc tests/if/*.cc)
+    add_executable (${Target_tests} ${TESTS_SOURCES} ${FW_EMULATOR_IF_SOURCES} ${FW_COMMON_IF_SOURCES})
+    target_link_libraries (${Target_tests} gtest_main)
 
     # Set up for Google Test
     include (GoogleTest)
-    gtest_discover_tests (${Target_util_tests})
+    gtest_discover_tests (${Target_tests})
 
 endif ()

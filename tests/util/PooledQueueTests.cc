@@ -1,8 +1,7 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
 #include <gtest/gtest.h>
-
-#include "util/PooledQueue.h"
+#include <util/PooledQueue.h>
 
 namespace {
 struct Dummy {
@@ -15,7 +14,7 @@ struct Dummy {
 }  // namespace
 
 namespace Clef::Util {
-TEST(PooledQueue, ZeroSize) {
+TEST(PooledQueueTest, ZeroSize) {
   PooledQueue<Dummy, 8> queue;
   ASSERT_EQ(queue.size(), 0);
   ASSERT_FALSE(queue.first());
@@ -23,7 +22,7 @@ TEST(PooledQueue, ZeroSize) {
   ASSERT_FALSE(queue.pop());
 }
 
-TEST(PooledQueue, Push) {
+TEST(PooledQueueTest, Push) {
   using Queue = PooledQueue<Dummy, 4>;
   Queue queue;
 
@@ -57,7 +56,7 @@ TEST(PooledQueue, Push) {
   ASSERT_EQ(it2->y, 56);
 }
 
-TEST(PooledQueue, Pop) {
+TEST(PooledQueueTest, Pop) {
   using Queue = PooledQueue<Dummy, 4>;
   Queue queue;
   ASSERT_TRUE(queue.push({0, 0}));

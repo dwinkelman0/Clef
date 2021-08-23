@@ -11,16 +11,19 @@ extern "C" {
 #include "usart/usart.h"
 }
 
-namespace Clef::Impl::Hw::Atmega2560 {
+namespace Clef::Impl::Atmega2560 {
 void Usart::init() {
-  uart_init(BAUD_CALC(SERIAL_BAUDRATE));
-  sei();
+  if (!isInitialized_) {
+    uart_init(BAUD_CALC(SERIAL_BAUDRATE));
+    sei();
+    isInitialized_ = true;
+  }
 }
 
-bool Usart::readyToRead() const { return uart_AvailableBytes() > 0; }
+bool Usart::isReadyToRead() const { return uart_AvailableBytes() > 0; }
 
 bool Usart::read(char *const c) {
-  if (readyToRead()) {
+  if (isReadyToRead()) {
     *c = uart_getc();
     return true;
   } else {
@@ -37,4 +40,4 @@ void Usart::writeLine(const char *line) {
   writeStr(line);
   writeChar('\n');
 }
-}  // namespace Clef::Impl::Hw::Atmega2560
+}  // namespace Clef::Impl::Atmega2560
