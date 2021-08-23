@@ -3,6 +3,7 @@
 #include "GcodeParser.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "String.h"
@@ -35,10 +36,23 @@ void GcodeParser::ingest() {
       commentMode_ = false;
       // Process the line
       if (parse(errorBufferSize, errorBuffer)) {
-        serial_.writeLine(Str::OK);
+        bool anyCodes = false;
+        for (uint8_t i = 0; i < 26; ++i) {
+          if (buckets_[i]) {
+            anyCodes = true;
+          }
+        }
+        if (anyCodes) {
+          if (interpret(errorBufferSize, errorBuffer)) {
+            serial_.writeLine(Str::OK);
+          } else {
+            serial_.writeLine(errorBuffer);
+          }
+        }
       } else {
         serial_.writeLine(errorBuffer);
       }
+      reset();
     } else if (newChar == ';') {
       // If there is a semicolon, ignore everything until the next new line.
       commentMode_ = true;
@@ -75,7 +89,7 @@ bool GcodeParser::parse(const uint16_t errorBufferSize, char *errorBuffer) {
   memset(buckets_, 0, sizeof(buckets_));
   char *pch = strtok(buffer_, " ");
   while (pch) {
-    unsigned int letter = pch[0] - 'A';
+    uint8_t letter = pch[0] - 'A';
     if (letter >= 26) {
       snprintf(errorBuffer, errorBufferSize, "%s: %c",
                Str::INVALID_CODE_LETTER_ERROR, pch[0]);
@@ -115,13 +129,9 @@ bool GcodeParser::parseInt(const char code, int32_t *result,
   if ('A' <= code && code <= 'Z') {
     const char *str = buckets_[code - 'A'];
     if (str && str[0]) {
-      if (sscanf(str, "%ld", result) == 1) {
-        return true;
-      }
-      if (errorBuffer) {
-        snprintf(errorBuffer, errorBufferSize, "%s: %c: %s",
-                 Str::INVALID_INT_ERROR, code, str);
-      }
+      // TODO: check if the int is actually valid
+      *result = atol(str);
+      return true;
     } else if (errorBuffer) {
       snprintf(errorBuffer, errorBufferSize, "%s: %c",
                Str::UNDEFINED_CODE_LETTER_ERROR, code);

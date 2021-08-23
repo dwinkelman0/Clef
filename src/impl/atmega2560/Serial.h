@@ -16,9 +16,6 @@ class Usart : public Clef::If::RWSerial {
   void writeLine(const char *line) override;
 
  private:
-  /**
-   * Prevent multiple initializations.
-   */
-  bool isInitialized_ = false;
+  bool isInitialized_ = false; /*!< Prevent multiple initializations. */
 };
 }  // namespace Clef::Impl::Atmega2560
