@@ -3,7 +3,7 @@
 #include <if/Serial.h>
 #include <stdint.h>
 
-namespace Clef::If {
+namespace Clef::Fw {
 namespace Str {
 extern const char *OK; /*!< The commmand was received and properly enqueued. */
 extern const char *BUFFER_OVERFLOW_ERROR; /*!< The internal buffer in the G-code
@@ -86,4 +86,4 @@ class GcodeParser {
                         sending status messages to printer client. */
   bool commentMode_; /*!< Whether a comment was detected in the line. */
 };
-}  // namespace Clef::If
+}  // namespace Clef::Fw

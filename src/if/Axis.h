@@ -5,6 +5,7 @@
 #include <if/PwmTimer.h>
 #include <if/Register.h>
 #include <stdint.h>
+#include <util/Units.h>
 
 namespace Clef::If {
 /**
@@ -27,9 +28,9 @@ class Axis {
    * associated with this axis.
    */
   class StepperDirectionRegister : protected RWRegister<uint8_t> {
-    inline void setIncreasing() { write(1); }
-    inline void setDecreasing() { write(0); }
-    inline void getIsIncreasing() { return read(); }
+    virtual void setIncreasing() = 0;
+    virtual void setDecreasing() = 0;
+    virtual void getIsIncreasing() = 0;
   };
 
   /**
@@ -42,13 +43,8 @@ class Axis {
      * values are microsteps per step (_32 is the best resolution).
      */
     enum class Resolution { _1 = 0, _2 = 1, _4 = 2, _8 = 3, _16 = 4, _32 = 5 };
-    inline void setResolution(const Resolution resolution) {
-      write(reinterpret_cast<uint8_t>(resolution));
-    }
-    inline Position<int32_t, PositionUnit::USTEP> getMicrostepsPerPulse()
-        const {
-      return 1 << read();
-    }
+    virtual void setResolution(const Resolution resolution) = 0;
+    virtual Position<int32_t, PositionUnit::USTEP> getMicrostepsPerPulse() = 0;
   };
 
   void init() {
@@ -74,17 +70,21 @@ class Axis {
   virtual void releaseAll() = 0;
 
   virtual void setTargetPos(
-      const Position<int32_t, PositionUnit::USTEPS> pos) = 0;
-  virtual Position<int32_t, PositionUnit::USTEPS> getCurrentPos() const = 0;
+      const Position<int32_t, PositionUnit::USTEP> pos) = 0;
+  virtual Position<int32_t, PositionUnit::USTEP> getCurrentPos() const = 0;
   virtual void setFeedrate(
-      const Feedrate<int32_t, PositionUnit::USTEPS, TimeUnit::MIN>
-          feedrate) = 0;
+      const Feedrate<int32_t, PositionUnit::USTEP, TimeUnit::MIN> feedrate) = 0;
 
  private:
-  StepperDirectionRegister
+  StepperDirectionRegister&
       stepperDirectionRegister_; /*!< Direction state of the stepper motor */
-  StepperResolutionRegister
+  StepperResolutionRegister&
       stepperResolutionRegister_; /*!< Resolution state of the stepper motor
-                                     driver */
+                                   driver */
 };
+
+class XAxis : public Axis<160> {};
+class YAxis : public Axis<160> {};
+class ZAxis : public Axis<400> {};
+class EAxis : public Axis<1280> {};
 }  // namespace Clef::If

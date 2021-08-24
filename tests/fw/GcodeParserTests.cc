@@ -1,10 +1,10 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
+#include <fw/GcodeParser.h>
 #include <gtest/gtest.h>
-#include <if/GcodeParser.h>
 #include <impl/emulator/Serial.h>
 
-namespace Clef::If {
+namespace Clef::Fw {
 class GcodeParserTest : public testing::Test {
  public:
   GcodeParserTest()
@@ -77,4 +77,4 @@ TEST_F(GcodeParserTest, InvalidGCode) {
             std::string(Str::INVALID_G_CODE_ERROR) + ": 888\n");
   doBasic();
 }
-}  // namespace Clef::If
+}  // namespace Clef::Fw

@@ -2,13 +2,12 @@
 
 #include "GcodeParser.h"
 
+#include <if/String.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "String.h"
-
-namespace Clef::If {
+namespace Clef::Fw {
 namespace Str {
 STRING(OK, "ok");
 STRING(BUFFER_OVERFLOW_ERROR, "buffer_overflow_error");
@@ -140,4 +139,4 @@ bool GcodeParser::parseInt(const char code, int32_t *result,
   *result = 0;
   return false;
 }
-}  // namespace Clef::If
+}  // namespace Clef::Fw

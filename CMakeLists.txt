@@ -12,7 +12,7 @@ set (Target_fw_atmega2560 clef-atmega2560)
 
 include_directories (src)
 
-file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc)
+file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc)
 
 if (${CLEF_TARGET} MATCHES "atmega2560")
     # Build Atmega2560 firmware
@@ -37,7 +37,7 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
 
     file (
         GLOB FW_ATMEGA2560_SOURCES
-        src/fw/main.atmega2560.cc
+        src/main.atmega2560.cc
         src/impl/atmega2560/*.cc
         src/impl/atmega2560/usart/*.c
     )
@@ -115,7 +115,7 @@ else ()
     file (GLOB FW_EMULATOR_IF_SOURCES src/impl/emulator/*.cc)
 
     # Tests target
-    file (GLOB TESTS_SOURCES tests/main.cc tests/util/*.cc tests/if/*.cc)
+    file (GLOB TESTS_SOURCES tests/main.cc tests/util/*.cc tests/fw/*.cc)
     add_executable (${Target_tests} ${TESTS_SOURCES} ${FW_EMULATOR_IF_SOURCES} ${FW_COMMON_IF_SOURCES})
     target_link_libraries (${Target_tests} gtest_main)
 

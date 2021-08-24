@@ -1,5 +1,7 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
+#pragma once
+
 namespace Clef::Util {
 /**
  * Supply an interface for operations that work on all units. `Unique` is a

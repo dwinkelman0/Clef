@@ -26,5 +26,5 @@ class WRegister {
  * Abstraction of a read-write register.
  */
 template <typename DType>
-class RWRegister : public RRegister, public WRegister {};
+class RWRegister : public RRegister<DType>, public WRegister<DType> {};
 }  // namespace Clef::If
