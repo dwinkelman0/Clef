@@ -18,6 +18,7 @@ class Axis {
   using TimeUnit = Clef::Util::TimeUnit;
 
  public:
+  static const uint32_t UstepsPerMm = USTEPS_PER_MM;
   template <typename DType, PositionUnit PositionU>
   using Position = Clef::Util::Position<DType, PositionU, USTEPS_PER_MM>;
   template <typename DType, PositionUnit PositionU, TimeUnit TimeU>

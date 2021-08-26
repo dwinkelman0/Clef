@@ -17,6 +17,7 @@ namespace Clef::Util {
 TEST(PooledQueueTest, ZeroSize) {
   PooledQueue<Dummy, 8> queue;
   ASSERT_EQ(queue.size(), 0);
+  ASSERT_EQ(queue.getNumSpacesLeft(), 7);
   ASSERT_FALSE(queue.first());
   ASSERT_FALSE(queue.last());
   ASSERT_FALSE(queue.pop());

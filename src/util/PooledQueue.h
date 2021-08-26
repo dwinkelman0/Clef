@@ -87,6 +87,7 @@ class PooledQueue {
     int16_t diff = (int16_t)lastIndex_ - (int16_t)firstIndex_;
     return diff < 0 ? diff + N : diff;
   }
+  inline uint16_t getNumSpacesLeft() const { return N - size() - 1; }
 
   /**
    * Allocate a spot in the queue and return the iterator. The iterator is

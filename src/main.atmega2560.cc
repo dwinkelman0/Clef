@@ -6,7 +6,9 @@
 
 int main() {
   Clef::Impl::Atmega2560::Usart serial;
-  Clef::Fw::GcodeParser gcodeParser(serial);
+  Clef::Fw::ActionQueue actionQueue;
+  Clef::Fw::XYEPositionQueue xyePositionQueue;
+  Clef::Fw::GcodeParser gcodeParser(serial, actionQueue, xyePositionQueue);
   gcodeParser.init();
   while (1) {
     gcodeParser.ingest();

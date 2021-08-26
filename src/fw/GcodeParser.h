@@ -1,5 +1,6 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
+#include <fw/Action.h>
 #include <if/Serial.h>
 #include <stdint.h>
 
@@ -14,21 +15,34 @@ extern const char
                                    case-sensitive) was detected. */
 extern const char *DUPLICATE_CODE_LETTER_ERROR; /*!< The same code letter was
                                                    supplied more than once. */
-extern const char *UNDEFINED_CODE_LETTER_ERROR; /*!< A code letter was supplied
-                                                   but did not have a value. */
+extern const char
+    *UNDEFINED_CODE_LETTER_ERROR; /*!< A code letter was not supplied or was
+                                     supplied but did not have a value. */
 extern const char
     *INVALID_INT_ERROR; /*!< An integer was expected but could not be parsed. */
 extern const char
     *INVALID_FLOAT_ERROR; /*!< A float was expected but could not be parsed. */
-extern const char
-    *MISSING_COMMAND_CODE_ERROR; /*!< Neither a 'G' nor 'M' code was given. */
+extern const char *
+    MISSING_COMMAND_CODE_ERROR; /*!< Neither a 'G' nor an 'M' code was given. */
 extern const char
     *INVALID_G_CODE_ERROR; /*!< The requested G-code is not supported. */
+extern const char
+    *INSUFFICIENT_QUEUE_CAPACITY_ERROR; /*!< There is not enough space in the
+                                           queue to insert all the actions
+                                           required by the instruction. */
 }  // namespace Str
 
+/**
+ * G-code parser. Characters are consumed through the ingest() function and
+ * stored in a buffer. When a complete line is collected, it is parsed into
+ * "buckets". Once a command type is detected (i.e. G or M code), other
+ * arguments are parsed as needed and actions are enqueued for the firmware to
+ * process.
+ */
 class GcodeParser {
  public:
-  GcodeParser(Clef::If::RWSerial &serial);
+  GcodeParser(Clef::If::RWSerial &serial, Clef::Fw::ActionQueue &actionQueue,
+              Clef::Fw::XYEPositionQueue &xyePositionQueue);
 
   void init();
 
@@ -54,26 +68,34 @@ class GcodeParser {
    * Break the stored buffer into ranges based on characters; returns false and
    * writes a string to the supplied error buffer if there was an error.
    */
-  bool parse(const uint16_t errorBufferSize, char *errorBuffer);
+  bool parse(const uint16_t errorBufferSize, char *const errorBuffer);
 
   /**
    * Interpret the arguments and perform and action.
    */
-  bool interpret(const uint16_t errorBufferSize, char *errorBuffer);
+  bool interpret(const uint16_t errorBufferSize, char *const errorBuffer);
+
+  /**
+   * Check whether a code letter exists.
+   */
+  bool hasCodeLetter(const char code) const;
 
   /**
    * Interpret an integer from the buffer; returns false and writes a string to
    * the supplied error buffer if there was an error.
    */
-  bool parseInt(const char code, int32_t *result,
-                const uint16_t errorBufferSize, char *errorBuffer);
+  bool parseInt(const char code, int32_t *const result,
+                const uint16_t errorBufferSize, char *const errorBuffer) const;
 
   /**
    * Interpret a float from the buffer; returns false and writes a string to the
    * supplied error buffer if there was an error.
    */
-  bool parseFloat(const char code, float *result,
-                  const uint16_t errorBufferSize, char *errorBuffer);
+  bool parseFloat(const char code, float *const result,
+                  const uint16_t errorBufferSize,
+                  char *const errorBuffer) const;
+
+  bool handleG1(const uint16_t errorBufferSize, char *const errorBuffer);
 
  private:
   static const uint16_t size_ = 80; /*!< Static size instead of templating. */
@@ -85,5 +107,11 @@ class GcodeParser {
       &serial_;      /*!< Input stream for receiving G-codes, output stream for
                         sending status messages to printer client. */
   bool commentMode_; /*!< Whether a comment was detected in the line. */
+  Clef::Fw::ActionQueue
+      &actionQueue_; /*!< Actions for the firmware to execute; this
+                  parser is the producer for this queue. */
+  Clef::Fw::XYEPositionQueue
+      &xyePositionQueue_; /*!< XYE position objects for the action queue to
+                             utilize. */
 };
 }  // namespace Clef::Fw
