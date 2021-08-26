@@ -41,8 +41,8 @@ extern const char
  */
 class GcodeParser {
  public:
-  GcodeParser(Clef::If::RWSerial &serial, Clef::Fw::ActionQueue &actionQueue,
-              Clef::Fw::XYEPositionQueue &xyePositionQueue);
+  GcodeParser(Clef::If::RWSerial &serial, ActionQueue &actionQueue,
+              XYEPositionQueue &xyePositionQueue);
 
   void init();
 
@@ -107,11 +107,9 @@ class GcodeParser {
       &serial_;      /*!< Input stream for receiving G-codes, output stream for
                         sending status messages to printer client. */
   bool commentMode_; /*!< Whether a comment was detected in the line. */
-  Clef::Fw::ActionQueue
-      &actionQueue_; /*!< Actions for the firmware to execute; this
-                  parser is the producer for this queue. */
-  Clef::Fw::XYEPositionQueue
-      &xyePositionQueue_; /*!< XYE position objects for the action queue to
-                             utilize. */
+  ActionQueue &actionQueue_; /*!< Actions for the firmware to execute; this
+                          parser is the producer for this queue. */
+  XYEPositionQueue &xyePositionQueue_; /*!< XYE position objects for the action
+                                          queue to utilize. */
 };
 }  // namespace Clef::Fw

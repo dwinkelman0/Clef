@@ -83,9 +83,4 @@ class Axis {
       stepperResolutionRegister_; /*!< Resolution state of the stepper motor
                                    driver */
 };
-
-class XAxis : public Axis<160> {};
-class YAxis : public Axis<160> {};
-class ZAxis : public Axis<400> {};
-class EAxis : public Axis<1280> {};
 }  // namespace Clef::If

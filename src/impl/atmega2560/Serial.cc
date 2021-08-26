@@ -2,7 +2,7 @@
 
 #include "Serial.h"
 
-#include "config.h"
+#include <impl/atmega2560/Config.h>
 
 extern "C" {
 #define USE_USART0

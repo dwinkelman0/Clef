@@ -21,9 +21,8 @@ STRING(INVALID_G_CODE_ERROR, "invalid_g_code_error");
 STRING(INSUFFICIENT_QUEUE_CAPACITY_ERROR, "alloc_error");
 }  // namespace Str
 
-GcodeParser::GcodeParser(Clef::If::RWSerial &serial,
-                         Clef::Fw::ActionQueue &actionQueue,
-                         Clef::Fw::XYEPositionQueue &xyePositionQueue)
+GcodeParser::GcodeParser(Clef::If::RWSerial &serial, ActionQueue &actionQueue,
+                         XYEPositionQueue &xyePositionQueue)
     : serial_(serial),
       actionQueue_(actionQueue),
       xyePositionQueue_(xyePositionQueue) {
@@ -213,28 +212,25 @@ bool GcodeParser::handleG1(const uint16_t errorBufferSize,
 
   // Enqueue actions
   if (hasF) {
-    actionQueue_.push(
-        Clef::Fw::Action::SetFeedrate(actionQueue_.getEndPosition(), f));
+    actionQueue_.push(Action::SetFeedrate(actionQueue_.getEndPosition(), f));
   }
   if (hasZ) {
-    actionQueue_.push(
-        Clef::Fw::Action::MoveZ(actionQueue_.getEndPosition(), z));
+    actionQueue_.push(Action::MoveZ(actionQueue_.getEndPosition(), z));
   }
   if (hasX || hasY) {
-    Clef::If::XAxis::Position<float, Clef::Util::PositionUnit::MM> xMms(x);
-    Clef::If::YAxis::Position<float, Clef::Util::PositionUnit::MM> yMms(y);
+    Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM> xMms(x);
+    Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM> yMms(y);
     if (hasE) {
       ActionQueue::Iterator lastAction = actionQueue_.last();
-      Clef::If::EAxis::Position<float, Clef::Util::PositionUnit::MM> eMms(e);
-      if (lastAction &&
-          (*lastAction)->getType() == Clef::Fw::Action::Type::MOVE_XYE) {
+      Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM> eMms(e);
+      if (lastAction && (*lastAction)->getType() == Action::Type::MOVE_XYE) {
         // If the last action in the queue is MoveXYE, coalesce
         lastAction->getVariant().moveXye.pushPoint(
             actionQueue_, xyePositionQueue_, hasX ? &xMms : nullptr,
             hasY ? &yMms : nullptr, eMms);
       } else {
         // Otherwise, start a new MoveXYE
-        Clef::Fw::Action::MoveXYE moveXye(actionQueue_.getEndPosition());
+        Action::MoveXYE moveXye(actionQueue_.getEndPosition());
         moveXye.pushPoint(actionQueue_, xyePositionQueue_,
                           hasX ? &xMms : nullptr, hasY ? &yMms : nullptr, eMms);
         if (moveXye.getNumPoints() > 0) {
@@ -242,13 +238,12 @@ bool GcodeParser::handleG1(const uint16_t errorBufferSize,
         }
       }
     } else {
-      actionQueue_.push(Clef::Fw::Action::MoveXY(actionQueue_.getEndPosition(),
-                                                 hasX ? &xMms : nullptr,
-                                                 hasY ? &yMms : nullptr));
+      actionQueue_.push(Action::MoveXY(actionQueue_.getEndPosition(),
+                                       hasX ? &xMms : nullptr,
+                                       hasY ? &yMms : nullptr));
     }
   } else if (hasE) {
-    actionQueue_.push(
-        Clef::Fw::Action::MoveE(actionQueue_.getEndPosition(), e));
+    actionQueue_.push(Action::MoveE(actionQueue_.getEndPosition(), e));
   }
   return true;
 }

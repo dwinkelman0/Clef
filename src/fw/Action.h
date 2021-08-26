@@ -2,50 +2,14 @@
 
 #pragma once
 
-#include <if/Axis.h>
+#include <fw/Axes.h>
 #include <util/PooledQueue.h>
 #include <util/Units.h>
 
 namespace Clef::Fw {
-struct XYEPosition {
-  using XPosition =
-      Clef::If::XAxis::Position<int32_t, Clef::Util::PositionUnit::USTEP>;
-  using YPosition =
-      Clef::If::YAxis::Position<int32_t, Clef::Util::PositionUnit::USTEP>;
-  using EPosition =
-      Clef::If::EAxis::Position<int32_t, Clef::Util::PositionUnit::USTEP>;
-  XPosition x = 0;
-  YPosition y = 0;
-  EPosition e = 0;
 
-  bool operator==(const XYEPosition &other) const;
-  bool operator!=(const XYEPosition &other) const;
-};
-
-class XYEPositionQueue : public Clef::Util::PooledQueue<XYEPosition, 128> {};
-
-struct XYZEPosition {
-  using XPosition =
-      Clef::If::XAxis::Position<int32_t, Clef::Util::PositionUnit::USTEP>;
-  using YPosition =
-      Clef::If::YAxis::Position<int32_t, Clef::Util::PositionUnit::USTEP>;
-  using ZPosition =
-      Clef::If::ZAxis::Position<int32_t, Clef::Util::PositionUnit::USTEP>;
-  using EPosition =
-      Clef::If::EAxis::Position<int32_t, Clef::Util::PositionUnit::USTEP>;
-  XPosition x = 0;
-  YPosition y = 0;
-  ZPosition z = 0;
-  EPosition e = 0;
-
-  XYEPosition asXyePosition() const;
-
-  bool operator==(const XYZEPosition &other) const;
-  bool operator!=(const XYZEPosition &other) const;
-};
-
-extern const XYEPosition originXye;
-extern const XYZEPosition originXyze;
+class XYEPositionQueue
+    : public Clef::Util::PooledQueue<Axes::XYEPosition, 128> {};
 
 class ActionQueue;
 
@@ -69,13 +33,13 @@ enum class Type {
  */
 class Action {
  public:
-  Action(const Type type, const XYZEPosition &startPosition);
+  Action(const Type type, const Axes::XYZEPosition &startPosition);
   Type getType() const;
-  XYZEPosition getEndPosition() const;
+  Axes::XYZEPosition getEndPosition() const;
 
  protected:
   Type type_;
-  XYZEPosition endPosition_;
+  Axes::XYZEPosition endPosition_;
 };
 
 class Null : public Action {
@@ -85,16 +49,16 @@ class Null : public Action {
 
 class MoveXY : public Action {
  public:
-  MoveXY(const XYZEPosition &startPosition,
-         const Clef::If::XAxis::Position<float, Clef::Util::PositionUnit::MM>
+  MoveXY(const Axes::XYZEPosition &startPosition,
+         const Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM>
              *const endPositionX,
-         const Clef::If::YAxis::Position<float, Clef::Util::PositionUnit::MM>
+         const Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM>
              *const endPositionY);
 };
 
 class MoveXYE : public Action {
  public:
-  MoveXYE(const XYZEPosition &startPosition);
+  MoveXYE(const Axes::XYZEPosition &startPosition);
 
   /**
    * Add a point in the extrusion path; returns false if there was not room in
@@ -102,11 +66,11 @@ class MoveXYE : public Action {
    */
   bool pushPoint(
       ActionQueue &actionQueue, XYEPositionQueue &xyePositionQueue,
-      const Clef::If::XAxis::Position<float, Clef::Util::PositionUnit::MM>
+      const Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM>
           *const endPositionX,
-      const Clef::If::YAxis::Position<float, Clef::Util::PositionUnit::MM>
+      const Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM>
           *const endPositionY,
-      const Clef::If::EAxis::Position<float, Clef::Util::PositionUnit::MM>
+      const Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM>
           endPositionE);
   uint16_t getNumPoints() const;
 
@@ -116,21 +80,22 @@ class MoveXYE : public Action {
 
 class MoveE : public Action {
  public:
-  MoveE(const XYZEPosition &startPosition,
-        const Clef::If::EAxis::Position<float, Clef::Util::PositionUnit::MM>
+  MoveE(const Axes::XYZEPosition &startPosition,
+        const Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM>
             endPositionE);
 };
 
 class MoveZ : public Action {
  public:
-  MoveZ(const XYZEPosition &startPosition,
-        const Clef::If::ZAxis::Position<float, Clef::Util::PositionUnit::MM>
+  MoveZ(const Axes::XYZEPosition &startPosition,
+        const Axes::ZAxis::Position<float, Clef::Util::PositionUnit::MM>
             endPositionZ);
 };
 
 class SetFeedrate : public Action {
  public:
-  SetFeedrate(const XYZEPosition &startPosition, const float rawFeedrateMMs);
+  SetFeedrate(const Axes::XYZEPosition &startPosition,
+              const float rawFeedrateMMs);
 
  private:
   float rawFeedrateMMs_;
@@ -168,7 +133,7 @@ class ActionVariant {
 class ActionQueue : public Clef::Util::PooledQueue<Action::ActionVariant, 16> {
  public:
   bool push(const Action::Action &action);
-  XYZEPosition getEndPosition() const;
+  Axes::XYZEPosition getEndPosition() const;
 
   /**
    * If a point is added to an XYE segment, this queue needs to know about it so
@@ -180,6 +145,7 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::ActionVariant, 16> {
   bool push(const Action::ActionVariant &action);
 
  private:
-  XYZEPosition endPosition_; /*!< Remember end position of the last action. */
+  Axes::XYZEPosition
+      endPosition_; /*!< Remember end position of the last action. */
 };
 }  // namespace Clef::Fw

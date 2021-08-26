@@ -3,83 +3,60 @@
 #include "Action.h"
 
 namespace Clef::Fw {
-
-bool XYEPosition::operator==(const XYEPosition &other) const {
-  return x == other.x && y == other.y && e == other.e;
-}
-
-bool XYEPosition::operator!=(const XYEPosition &other) const {
-  return !(*this == other);
-}
-
-bool XYZEPosition::operator==(const XYZEPosition &other) const {
-  return x == other.x && y == other.y && z == other.z && e == other.e;
-}
-
-bool XYZEPosition::operator!=(const XYZEPosition &other) const {
-  return !(*this == other);
-}
-
-XYEPosition XYZEPosition::asXyePosition() const { return {x, y, e}; }
-
-const XYEPosition originXye = {0, 0, 0};
-const XYZEPosition originXyze = {0, 0, 0, 0};
-
 namespace Action {
-Action::Action(const Type type, const XYZEPosition &startPosition)
+Action::Action(const Type type, const Axes::XYZEPosition &startPosition)
     : type_(type), endPosition_(startPosition) {}
 
 Type Action::getType() const { return type_; }
 
-XYZEPosition Action::getEndPosition() const { return endPosition_; }
+Axes::XYZEPosition Action::getEndPosition() const { return endPosition_; }
 
-Null::Null() : Action(Type::NULL_ACTION, originXyze) {}
+Null::Null() : Action(Type::NULL_ACTION, {0, 0, 0, 0}) {}
 
-MoveXY::MoveXY(
-    const XYZEPosition &startPosition,
-    const Clef::If::XAxis::Position<float, Clef::Util::PositionUnit::MM>
-        *const endPositionX,
-    const Clef::If::YAxis::Position<float, Clef::Util::PositionUnit::MM>
-        *const endPositionY)
+MoveXY::MoveXY(const Axes::XYZEPosition &startPosition,
+               const Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM>
+                   *const endPositionX,
+               const Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM>
+                   *const endPositionY)
     : Action(Type::MOVE_XY, startPosition) {
   if (endPositionX) {
-    endPosition_.x = XYZEPosition::XPosition(static_cast<int32_t>(
-        *Clef::If::XAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
+    endPosition_.x = Axes::XYZEPosition::XPosition(static_cast<int32_t>(
+        *Axes::XAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
             *endPositionX)));
   }
   if (endPositionY) {
-    endPosition_.y = XYZEPosition::YPosition(static_cast<int32_t>(
-        *Clef::If::YAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
+    endPosition_.y = Axes::XYZEPosition::YPosition(static_cast<int32_t>(
+        *Axes::YAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
             *endPositionY)));
   }
 }
 
-MoveXYE::MoveXYE(const XYZEPosition &startPosition)
+MoveXYE::MoveXYE(const Axes::XYZEPosition &startPosition)
     : Action(Type::MOVE_XYE, startPosition), numPoints_(0) {}
 
 bool MoveXYE::pushPoint(
     ActionQueue &actionQueue, XYEPositionQueue &xyePositionQueue,
-    const Clef::If::XAxis::Position<float, Clef::Util::PositionUnit::MM>
+    const Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM>
         *const endPositionX,
-    const Clef::If::YAxis::Position<float, Clef::Util::PositionUnit::MM>
+    const Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM>
         *const endPositionY,
-    const Clef::If::EAxis::Position<float, Clef::Util::PositionUnit::MM>
+    const Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM>
         endPositionE) {
   // Update end position but do not commit to state until a point is
   // successfully pushed to the queue.
-  XYZEPosition tempEndPosition = getEndPosition();
+  Axes::XYZEPosition tempEndPosition = getEndPosition();
   if (endPositionX) {
-    tempEndPosition.x = XYZEPosition::XPosition(static_cast<int32_t>(
-        *Clef::If::XAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
+    tempEndPosition.x = Axes::XYZEPosition::XPosition(static_cast<int32_t>(
+        *Axes::XAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
             *endPositionX)));
   }
   if (endPositionY) {
-    tempEndPosition.y = XYZEPosition::YPosition(static_cast<int32_t>(
-        *Clef::If::YAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
+    tempEndPosition.y = Axes::XYZEPosition::YPosition(static_cast<int32_t>(
+        *Axes::YAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
             *endPositionY)));
   }
-  tempEndPosition.e = XYZEPosition::EPosition(static_cast<int32_t>(
-      *Clef::If::EAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
+  tempEndPosition.e = Axes::XYZEPosition::EPosition(static_cast<int32_t>(
+      *Axes::EAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
           endPositionE)));
   if (tempEndPosition != getEndPosition()) {
     // Require that the point be distinct to prevent division by zero.
@@ -97,27 +74,25 @@ bool MoveXYE::pushPoint(
 
 uint16_t MoveXYE::getNumPoints() const { return numPoints_; }
 
-MoveE::MoveE(
-    const XYZEPosition &startPosition,
-    const Clef::If::EAxis::Position<float, Clef::Util::PositionUnit::MM>
-        endPositionE)
+MoveE::MoveE(const Axes::XYZEPosition &startPosition,
+             const Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM>
+                 endPositionE)
     : Action(Type::MOVE_E, startPosition) {
-  endPosition_.e = XYZEPosition::EPosition(static_cast<int32_t>(
-      *Clef::If::EAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
+  endPosition_.e = Axes::XYZEPosition::EPosition(static_cast<int32_t>(
+      *Axes::EAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
           endPositionE)));
 }
 
-MoveZ::MoveZ(
-    const XYZEPosition &startPosition,
-    const Clef::If::ZAxis::Position<float, Clef::Util::PositionUnit::MM>
-        endPositionZ)
+MoveZ::MoveZ(const Axes::XYZEPosition &startPosition,
+             const Axes::ZAxis::Position<float, Clef::Util::PositionUnit::MM>
+                 endPositionZ)
     : Action(Type::MOVE_Z, startPosition) {
-  endPosition_.z = XYZEPosition::ZPosition(static_cast<int32_t>(
-      *Clef::If::ZAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
+  endPosition_.z = Axes::XYZEPosition::ZPosition(static_cast<int32_t>(
+      *Axes::ZAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
           endPositionZ)));
 }
 
-SetFeedrate::SetFeedrate(const XYZEPosition &startPosition,
+SetFeedrate::SetFeedrate(const Axes::XYZEPosition &startPosition,
                          const float rawFeedrateMMs)
     : Action(Type::SET_FEEDRATE, startPosition),
       rawFeedrateMMs_(rawFeedrateMMs) {}
@@ -209,7 +184,7 @@ bool ActionQueue::push(const Action::Action &action) {
   return false;
 }
 
-XYZEPosition ActionQueue::getEndPosition() const { return endPosition_; }
+Axes::XYZEPosition ActionQueue::getEndPosition() const { return endPosition_; }
 
 void ActionQueue::updateXyeSegment(const Action::MoveXYE &moveXye) {
   endPosition_ = moveXye.getEndPosition();
