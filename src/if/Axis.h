@@ -49,14 +49,12 @@ class Axis : public Clef::Util::Initialized {
     virtual Position<int32_t, PositionUnit::USTEP> getMicrostepsPerPulse() = 0;
   };
 
-  bool init() override {
-    if (Clef::Util::Initialized::init()) {
-      stepperDirectionRegister_.init();
-      stepperResolutionRegister_.init();
-      return true;
-    }
-    return false;
-  }
+  Axis(StepperDirectionRegister& stepperDirectionRegister,
+       StepperResolutionRegister& stepperResolutionRegister)
+      : stepperDirectionRegister_(stepperDirectionRegister),
+        stepperResolutionRegister_(stepperResolutionRegister) {}
+
+  bool init() override { return Clef::Util::Initialized::init(); }
 
   /**
    * Reserve the axis so that the underlying resources are available for an

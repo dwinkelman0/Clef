@@ -45,7 +45,7 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
     set_target_properties (
         ${elf_file}
         PROPERTIES
-            COMPILE_FLAGS "-mmcu=atmega2560 -O3 -flto -D F_CPU=16000000L -Wall"
+            COMPILE_FLAGS "-mmcu=atmega2560 -Os -flto -D F_CPU=16000000L -Wall"
             LINK_FLAGS "-mmcu=atmega2560"
     )
     add_custom_command (
@@ -75,32 +75,34 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
             ${eep_file}
             ${hex_file}
     )
-    add_custom_target(
-        ${Target_fw_atmega2560}-upload-hex
-        ALL
-            ${AVRDUDE}
-            -D
-            -p atmega2560
-            -c wiring
-            -P ${CLEF_PORT}
-            -b ${CLEF_BAUD}
-            -U flash:w:${hex_file}:i
-        DEPENDS ${Target_fw_atmega2560}
-        COMMENT "Uploading ${hex_file}"
-    )
-    add_custom_target(
-        ${Target_fw_atmega2560}-upload-eep
-        ALL
-            ${AVRDUDE}
-            -D
-            -p atmega2560
-            -c wiring
-            -P ${CLEF_PORT}
-            -b ${CLEF_BAUD}
-            -U eeprom:w:${eep_file}:i
-        DEPENDS ${Target_fw_atmega2560} ${Target_fw_atmega2560}-upload-hex
-        COMMENT "Uploading ${eep_file}"
-    )
+    if (DEFINED CLEF_PORT AND DEFINED CLEF_BAUD)
+        add_custom_target(
+            ${Target_fw_atmega2560}-upload-hex
+            ALL
+                ${AVRDUDE}
+                -D
+                -p atmega2560
+                -c wiring
+                -P ${CLEF_PORT}
+                -b ${CLEF_BAUD}
+                -U flash:w:${hex_file}:i
+            DEPENDS ${Target_fw_atmega2560}
+            COMMENT "Uploading ${hex_file}"
+        )
+        add_custom_target(
+            ${Target_fw_atmega2560}-upload-eep
+            ALL
+                ${AVRDUDE}
+                -D
+                -p atmega2560
+                -c wiring
+                -P ${CLEF_PORT}
+                -b ${CLEF_BAUD}
+                -U eeprom:w:${eep_file}:i
+            DEPENDS ${Target_fw_atmega2560} ${Target_fw_atmega2560}-upload-hex
+            COMMENT "Uploading ${eep_file}"
+        )
+    endif ()
 
 else ()
     # Install Google Test
