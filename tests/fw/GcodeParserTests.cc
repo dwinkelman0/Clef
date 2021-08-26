@@ -219,4 +219,14 @@ TEST_F(GcodeParserTest, G1_Z) {
             static_cast<int32_t>(Clef::If::ZAxis::UstepsPerMm) * -10);
   actionQueue_.pop();
 }
+
+TEST_F(GcodeParserTest, G1_F) {
+  serial_.inject("G1 X80 F3000\n");
+  parser_.ingest();
+  Clef::Fw::ActionQueue::Iterator it = actionQueue_.first();
+  ASSERT_EQ((*it)->getType(), Clef::Fw::Action::Type::SET_FEEDRATE);
+  ASSERT_EQ((*it)->getEndPosition(), Clef::Fw::originXyze);
+  actionQueue_.pop();
+  checkBasic(Clef::Fw::originXyze);
+}
 }  // namespace Clef::Fw

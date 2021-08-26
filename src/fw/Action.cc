@@ -3,6 +3,15 @@
 #include "Action.h"
 
 namespace Clef::Fw {
+
+bool XYEPosition::operator==(const XYEPosition &other) const {
+  return x == other.x && y == other.y && e == other.e;
+}
+
+bool XYZEPosition::operator==(const XYZEPosition &other) const {
+  return x == other.x && y == other.y && z == other.z && e == other.e;
+}
+
 XYEPosition XYZEPosition::asXyePosition() const { return {x, y, e}; }
 
 const XYEPosition originXye = {0, 0, 0};
