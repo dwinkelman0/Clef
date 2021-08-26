@@ -2,33 +2,25 @@
 
 #pragma once
 
+#include <util/Initialized.h>
+
 namespace Clef::If {
 /**
  * Abstraction of a read-only serial connection.
  */
-class RSerial {
+class RSerial : public Clef::Util::Initialized {
  public:
-  virtual void init() = 0;
   virtual bool isReadyToRead() const = 0;
   virtual bool read(char *const c) = 0;
 };
 
 /**
- * Abstraction of a write-only serial connection.
+ * Abstraction of a two-way serial connection.
  */
-class WSerial {
+class RWSerial : public RSerial {
  public:
-  virtual void init() = 0;
   virtual void writeChar(const char c) = 0;
   virtual void writeStr(const char *str) = 0;
   virtual void writeLine(const char *line) = 0;
-};
-
-/**
- * Abstraction of a two-way serial connection.
- */
-class RWSerial : public RSerial, public WSerial {
- public:
-  virtual void init() = 0;
 };
 }  // namespace Clef::If

@@ -29,7 +29,13 @@ GcodeParser::GcodeParser(Clef::If::RWSerial &serial, ActionQueue &actionQueue,
   reset();
 }
 
-void GcodeParser::init() { serial_.init(); }
+bool GcodeParser::init() {
+  if (Clef::Util::Initialized::init()) {
+    serial_.init();
+    return true;
+  }
+  return false;
+}
 
 void GcodeParser::ingest() {
   const uint16_t errorBufferSize = 64;

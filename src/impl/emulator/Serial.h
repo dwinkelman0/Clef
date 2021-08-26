@@ -15,7 +15,7 @@ class Serial : public Clef::If::RWSerial {
  public:
   Serial(std::shared_ptr<std::mutex> globalMutex);
 
-  void init() override;
+  bool init() override;
   bool isReadyToRead() const override;
   bool read(char *const c) override;
   void writeChar(const char c) override;

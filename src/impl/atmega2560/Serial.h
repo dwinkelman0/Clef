@@ -8,7 +8,7 @@
 namespace Clef::Impl::Atmega2560 {
 class Usart : public Clef::If::RWSerial {
  public:
-  void init() override;
+  bool init() override;
   bool isReadyToRead() const override;
   bool read(char *const c) override;
   void writeChar(const char c) override;

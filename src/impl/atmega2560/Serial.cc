@@ -12,12 +12,13 @@ extern "C" {
 }
 
 namespace Clef::Impl::Atmega2560 {
-void Usart::init() {
-  if (!isInitialized_) {
+bool Usart::init() {
+  if (Clef::Util::Initialized::init()) {
     uart_init(BAUD_CALC(SERIAL_BAUDRATE));
     sei();
-    isInitialized_ = true;
+    return true;
   }
+  return false;
 }
 
 bool Usart::isReadyToRead() const { return uart_AvailableBytes() > 0; }

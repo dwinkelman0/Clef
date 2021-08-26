@@ -9,7 +9,9 @@ class GcodeParserTest : public testing::Test {
  public:
   GcodeParserTest()
       : serial_(std::make_shared<std::mutex>()),
-        parser_(serial_, actionQueue_, xyePositionQueue_) {}
+        parser_(serial_, actionQueue_, xyePositionQueue_) {
+    parser_.init();
+  }
 
   /**
    * Send a minimal valid G-Code command.
@@ -43,6 +45,11 @@ class GcodeParserTest : public testing::Test {
   XYEPositionQueue xyePositionQueue_;
   GcodeParser parser_;
 };
+
+TEST_F(GcodeParserTest, Initialization) {
+  ASSERT_FALSE(serial_.init());
+  ASSERT_FALSE(parser_.init());
+}
 
 TEST_F(GcodeParserTest, Basic) { doBasic(); }
 

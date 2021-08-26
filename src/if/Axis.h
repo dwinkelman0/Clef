@@ -5,6 +5,7 @@
 #include <if/PwmTimer.h>
 #include <if/Register.h>
 #include <stdint.h>
+#include <util/Initialized.h>
 #include <util/Units.h>
 
 namespace Clef::If {
@@ -12,7 +13,7 @@ namespace Clef::If {
  * Abstraction of an axis, cartesian or otherwise.
  */
 template <uint32_t USTEPS_PER_MM>
-class Axis {
+class Axis : public Clef::Util::Initialized {
  private:
   using PositionUnit = Clef::Util::PositionUnit;
   using TimeUnit = Clef::Util::TimeUnit;
@@ -48,10 +49,13 @@ class Axis {
     virtual Position<int32_t, PositionUnit::USTEP> getMicrostepsPerPulse() = 0;
   };
 
-  void init() {
-    stepperDirectionRegister_.setIncreasing();
-    stepperResolutionRegister_.setResolution(
-        StepperResolutionRegister::Resolution::_1);
+  bool init() override {
+    if (Clef::Util::Initialized::init()) {
+      stepperDirectionRegister_.init();
+      stepperResolutionRegister_.init();
+      return true;
+    }
+    return false;
   }
 
   /**

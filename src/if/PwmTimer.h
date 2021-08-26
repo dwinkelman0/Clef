@@ -2,16 +2,16 @@
 
 #pragma once
 
+#include <util/Initialized.h>
+
 namespace Clef::If {
 /**
  * Abstraction of a timer that generates interrupts on its rising and falling
  * edges. It is parametrized in terms of frequency and duty-cycle. The timer can
  * be turned on and off so that it generates interrupts only some of the time.
  */
-class PwmTimer {
+class PwmTimer : public Clef::Util::Initialized {
  public:
-  virtual void init() = 0;
-
   /**
    * Enable the timer to generate interrupts; the timer restarts its count.
    */

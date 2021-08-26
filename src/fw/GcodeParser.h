@@ -3,6 +3,7 @@
 #include <fw/Action.h>
 #include <if/Serial.h>
 #include <stdint.h>
+#include <util/Initialized.h>
 
 namespace Clef::Fw {
 namespace Str {
@@ -39,12 +40,12 @@ extern const char
  * arguments are parsed as needed and actions are enqueued for the firmware to
  * process.
  */
-class GcodeParser {
+class GcodeParser : public Clef::Util::Initialized {
  public:
   GcodeParser(Clef::If::RWSerial &serial, ActionQueue &actionQueue,
               XYEPositionQueue &xyePositionQueue);
 
-  void init();
+  bool init() override;
 
   /**
    * Consume as many characters as possible from serial input. This should be

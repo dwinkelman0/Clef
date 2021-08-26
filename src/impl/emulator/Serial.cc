@@ -8,7 +8,7 @@ namespace Clef::Impl::Emulator {
 Serial::Serial(std::shared_ptr<std::mutex> globalMutex)
     : globalMutex_(globalMutex) {}
 
-void Serial::init() {}
+bool Serial::init() { return Clef::Util::Initialized::init(); }
 
 bool Serial::isReadyToRead() const {
   std::unique_lock<std::mutex> lock(*globalMutex_);
