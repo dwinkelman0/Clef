@@ -19,6 +19,7 @@ struct XYEPosition {
   EPosition e = 0;
 
   bool operator==(const XYEPosition &other) const;
+  bool operator!=(const XYEPosition &other) const;
 };
 
 class XYEPositionQueue : public Clef::Util::PooledQueue<XYEPosition, 128> {};
@@ -40,6 +41,7 @@ struct XYZEPosition {
   XYEPosition asXyePosition() const;
 
   bool operator==(const XYZEPosition &other) const;
+  bool operator!=(const XYZEPosition &other) const;
 };
 
 extern const XYEPosition originXye;

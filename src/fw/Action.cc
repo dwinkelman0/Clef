@@ -8,8 +8,16 @@ bool XYEPosition::operator==(const XYEPosition &other) const {
   return x == other.x && y == other.y && e == other.e;
 }
 
+bool XYEPosition::operator!=(const XYEPosition &other) const {
+  return !(*this == other);
+}
+
 bool XYZEPosition::operator==(const XYZEPosition &other) const {
   return x == other.x && y == other.y && z == other.z && e == other.e;
+}
+
+bool XYZEPosition::operator!=(const XYZEPosition &other) const {
+  return !(*this == other);
 }
 
 XYEPosition XYZEPosition::asXyePosition() const { return {x, y, e}; }
@@ -73,13 +81,18 @@ bool MoveXYE::pushPoint(
   tempEndPosition.e = XYZEPosition::EPosition(static_cast<int32_t>(
       *Clef::If::EAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
           endPositionE)));
-  bool output = xyePositionQueue.push(tempEndPosition.asXyePosition());
-  endPosition_ = tempEndPosition;
-  if (actionQueue.last() && this == &actionQueue.last()->getVariant().moveXye) {
-    actionQueue.updateXyeSegment(*this);
+  if (tempEndPosition != getEndPosition()) {
+    // Require that the point be distinct to prevent division by zero.
+    bool output = xyePositionQueue.push(tempEndPosition.asXyePosition());
+    endPosition_ = tempEndPosition;
+    if (actionQueue.last() &&
+        this == &actionQueue.last()->getVariant().moveXye) {
+      actionQueue.updateXyeSegment(*this);
+    }
+    numPoints_++;
+    return output;
   }
-  numPoints_++;
-  return output;
+  return true;
 }
 
 uint16_t MoveXYE::getNumPoints() const { return numPoints_; }

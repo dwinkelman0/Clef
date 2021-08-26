@@ -197,6 +197,26 @@ TEST_F(GcodeParserTest, G1_XYE) {
   xyePositionQueue_.pop();
 }
 
+TEST_F(GcodeParserTest, G1_XYE_Aliasing) {
+  serial_.inject("G1 X40 Y30 E2\n");
+  serial_.inject("G1 X40 Y30 E2\n");
+  parser_.ingest();
+  ASSERT_EQ(serial_.extract(), "ok\nok\n");
+  ASSERT_EQ(actionQueue_.size(), 1);
+  Clef::Fw::ActionQueue::Iterator it = actionQueue_.last();
+  ASSERT_EQ((*it)->getType(), Clef::Fw::Action::Type::MOVE_XYE);
+  Clef::Fw::XYZEPosition endPosition = (*it)->getEndPosition();
+  ASSERT_EQ(*endPosition.x, Clef::If::XAxis::UstepsPerMm * 40);
+  ASSERT_EQ(*endPosition.y, Clef::If::YAxis::UstepsPerMm * 30);
+  ASSERT_EQ(*endPosition.e, Clef::If::EAxis::UstepsPerMm * 2);
+  ASSERT_EQ(it->getVariant().moveXye.getNumPoints(), 1);
+  ASSERT_EQ(xyePositionQueue_.size(), 1);
+  Clef::Fw::XYEPosition xyePosition1 = *xyePositionQueue_.last();
+  ASSERT_EQ(*xyePosition1.x, Clef::If::XAxis::UstepsPerMm * 40);
+  ASSERT_EQ(*xyePosition1.y, Clef::If::YAxis::UstepsPerMm * 30);
+  ASSERT_EQ(*xyePosition1.e, Clef::If::EAxis::UstepsPerMm * 2);
+}
+
 TEST_F(GcodeParserTest, G1_E) {
   serial_.inject("G1 E5\n");
   parser_.ingest();
@@ -228,5 +248,52 @@ TEST_F(GcodeParserTest, G1_F) {
   ASSERT_EQ((*it)->getEndPosition(), Clef::Fw::originXyze);
   actionQueue_.pop();
   checkBasic(Clef::Fw::originXyze);
+}
+
+TEST_F(GcodeParserTest, UndefinedCodeLetter) {
+  serial_.inject("G1 X\n");
+  parser_.ingest();
+  ASSERT_EQ(serial_.extract(),
+            std::string(Str::UNDEFINED_CODE_LETTER_ERROR) + ": X\n");
+  doBasic();
+}
+
+TEST_F(GcodeParserTest, InsufficientQueueCapacity) {
+  // Test limits of action buffer
+  bool broken = false;
+  for (int i = 0; i < 1000; ++i) {
+    serial_.inject("G1 X80\n");
+    parser_.ingest();
+    std::string result = serial_.extract();
+    if (result != "ok\n") {
+      ASSERT_EQ(result,
+                std::string(Str::INSUFFICIENT_QUEUE_CAPACITY_ERROR) + "\n");
+      broken = true;
+      break;
+    }
+  }
+  while (actionQueue_.size() > 0) {
+    actionQueue_.pop();
+  }
+  ASSERT_TRUE(broken);
+
+  // Test limits of xyePosition buffer
+  broken = false;
+  for (int i = 0; i < 1000; ++i) {
+    serial_.inject("G1 X80 E" + std::to_string(i) + "\n");
+    parser_.ingest();
+    std::string result = serial_.extract();
+    if (result != "ok\n") {
+      ASSERT_EQ(result,
+                std::string(Str::INSUFFICIENT_QUEUE_CAPACITY_ERROR) + "\n");
+      broken = true;
+      break;
+    }
+  }
+  while (xyePositionQueue_.size() > 0) {
+    xyePositionQueue_.pop();
+  }
+  actionQueue_.pop();
+  ASSERT_TRUE(broken);
 }
 }  // namespace Clef::Fw

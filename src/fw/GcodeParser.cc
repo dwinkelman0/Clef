@@ -237,7 +237,9 @@ bool GcodeParser::handleG1(const uint16_t errorBufferSize,
         Clef::Fw::Action::MoveXYE moveXye(actionQueue_.getEndPosition());
         moveXye.pushPoint(actionQueue_, xyePositionQueue_,
                           hasX ? &xMms : nullptr, hasY ? &yMms : nullptr, eMms);
-        actionQueue_.push(moveXye);
+        if (moveXye.getNumPoints() > 0) {
+          actionQueue_.push(moveXye);
+        }
       }
     } else {
       actionQueue_.push(Clef::Fw::Action::MoveXY(actionQueue_.getEndPosition(),
