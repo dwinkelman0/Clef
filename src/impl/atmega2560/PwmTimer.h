@@ -57,7 +57,10 @@ template class GenericTimer<uint16_t>;
  * Create classes which are essentially wrappers around timer registers.
  */
 #define TIMER16(N)                                                           \
-  : public GenericTimer<uint16_t> {                                          \
+ public                                                                      \
+  GenericTimer<uint16_t> {                                                   \
+    friend class Clock;                                                      \
+                                                                             \
    private:                                                                  \
     void initRegs() override {                                               \
       REG3(TCCR, N, A) = 0;                                                  \
@@ -99,10 +102,12 @@ template class GenericTimer<uint16_t>;
     uint16_t getMaxValue() const { return 0xffff; }                          \
   }
 
-class XAxisTimer TIMER16(3);
-class YAxisTimer TIMER16(4);
-class ZEAxisTimer TIMER16(5);
+class ClockTimer : TIMER16(1);
+class XAxisTimer : TIMER16(3);
+class YAxisTimer : TIMER16(4);
+class ZEAxisTimer : TIMER16(5);
 
+extern ClockTimer clockTimer;
 extern XAxisTimer xAxisTimer;
 extern YAxisTimer yAxisTimer;
 extern ZEAxisTimer zeAxisTimer;

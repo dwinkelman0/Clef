@@ -3,6 +3,7 @@
 #include "PwmTimer.h"
 
 #include <avr/interrupt.h>
+#include <impl/atmega2560/Interrupts.h>
 
 namespace Clef::Impl::Atmega2560 {
 template <typename DType>
@@ -54,14 +55,15 @@ void GenericTimer<DType>::setFrequency(
       divisor == 0
           ? this->getMaxValue()
           : static_cast<DType>(clockFrequency / divisor / frequency - 1);
-  cli();
-  this->setCompareA(compare);
-  this->setCompareB(compare / 2);
-  this->setPrescaler(prescaling);
-  if (this->getCount() >= compare) {
-    this->setCount(0);
+  {
+    DisableInterrupts noInterrupts;
+    this->setCompareA(compare);
+    this->setCompareB(compare / 2);
+    this->setPrescaler(prescaling);
+    if (this->getCount() >= compare) {
+      this->setCount(0);
+    }
   }
-  sei();
 }
 
 /**
@@ -79,10 +81,12 @@ void GenericTimer<DType>::setFrequency(
     }                                                           \
   }
 
+ClockTimer clockTimer;
 XAxisTimer xAxisTimer;
 YAxisTimer yAxisTimer;
 ZEAxisTimer zeAxisTimer;
 
+TIMER_ISRS(clockTimer, 1);
 TIMER_ISRS(xAxisTimer, 3);
 TIMER_ISRS(yAxisTimer, 4);
 TIMER_ISRS(zeAxisTimer, 5);

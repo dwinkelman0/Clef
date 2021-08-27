@@ -31,8 +31,8 @@ class PwmTimer : public Clef::Util::Initialized {
     risingEdgeCallbackData_ = data;
   }
   void setFallingEdgeCallback(const TransitionCallback callback, void *data) {
-    risingEdgeCallback_ = callback;
-    risingEdgeCallbackData_ = data;
+    fallingEdgeCallback_ = callback;
+    fallingEdgeCallbackData_ = data;
   }
 
  public:

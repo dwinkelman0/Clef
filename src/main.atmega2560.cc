@@ -1,26 +1,37 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
-#include <avr/interrupt.h>
 #include <fw/GcodeParser.h>
+#include <impl/atmega2560/Clock.h>
+#include <impl/atmega2560/Interrupts.h>
 #include <impl/atmega2560/PwmTimer.h>
 #include <impl/atmega2560/Serial.h>
 #include <stdio.h>
 
+Clef::Impl::Atmega2560::Clock clock(Clef::Impl::Atmega2560::clockTimer);
 Clef::Impl::Atmega2560::Usart serial;
 Clef::Fw::ActionQueue actionQueue;
 Clef::Fw::XYEPositionQueue xyePositionQueue;
 Clef::Fw::GcodeParser gcodeParser(serial, actionQueue, xyePositionQueue);
 
 void printSomething(void *arg) {
-  sei();
-  serial.writeLine("Hello");
-  cli();
+  uint64_t micros = *clock.getMicros();
+  char buffer[32];
+  sprintf(buffer, "t = %lu", micros);
+  {
+    Clef::Impl::Atmega2560::EnableInterrupts interrupts;
+    serial.writeLine(buffer);
+  }
 }
 
 int main() {
+  if (clock.init()) {
+    serial.writeLine("Initialized clock");
+  }
   Clef::Impl::Atmega2560::xAxisTimer.init();
   Clef::Impl::Atmega2560::xAxisTimer.setRisingEdgeCallback(printSomething,
                                                            nullptr);
+  Clef::Impl::Atmega2560::xAxisTimer.setFallingEdgeCallback(printSomething,
+                                                            nullptr);
   Clef::Impl::Atmega2560::xAxisTimer.setFrequency(0.5f);
   Clef::Impl::Atmega2560::xAxisTimer.enable();
 

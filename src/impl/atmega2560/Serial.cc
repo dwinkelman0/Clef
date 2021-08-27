@@ -6,8 +6,6 @@
 
 extern "C" {
 #define USE_USART0
-#include <avr/interrupt.h>
-
 #include "usart/usart.h"
 }
 
@@ -15,7 +13,6 @@ namespace Clef::Impl::Atmega2560 {
 bool Usart::init() {
   if (Clef::Util::Initialized::init()) {
     uart_init(BAUD_CALC(SERIAL_BAUDRATE));
-    sei();
     return true;
   }
   return false;

@@ -8,6 +8,8 @@ namespace Clef::Util {
  */
 class Initialized {
  public:
+  Initialized() : initialized_(false) {}
+
   /**
    * Returns false if and only if this object is already initialized.
    */
@@ -20,6 +22,6 @@ class Initialized {
   }
 
  private:
-  bool initialized_ = false;
+  bool initialized_;
 };
 }  // namespace Clef::Util
