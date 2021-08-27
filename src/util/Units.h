@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <stdint.h>
+
 namespace Clef::Util {
 /**
  * Supply an interface for operations that work on all units. `Unique` is a

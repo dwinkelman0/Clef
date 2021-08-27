@@ -3,6 +3,7 @@
 #pragma once
 
 #include <util/Initialized.h>
+#include <util/Units.h>
 
 namespace Clef::If {
 /**
@@ -12,6 +13,8 @@ namespace Clef::If {
  */
 class PwmTimer : public Clef::Util::Initialized {
  public:
+  using TransitionCallback = void (*)(void *);
+
   /**
    * Enable the timer to generate interrupts; the timer restarts its count.
    */
@@ -22,9 +25,20 @@ class PwmTimer : public Clef::Util::Initialized {
    */
   virtual void disable() = 0;
 
-  virtual void setFrequency(const float frequency) = 0;
-  virtual void setDutyCycle(const float dutyCycle) = 0;
-  virtual void setRisingEdgeCb(void (*cb)(void *), void *data) = 0;
-  virtual void setFallingEdgeCb(void (*cb)(void *), void *data) = 0;
+  virtual void setFrequency(const Clef::Util::Frequency<float> frequency) = 0;
+  void setRisingEdgeCallback(const TransitionCallback callback, void *data) {
+    risingEdgeCallback_ = callback;
+    risingEdgeCallbackData_ = data;
+  }
+  void setFallingEdgeCallback(const TransitionCallback callback, void *data) {
+    risingEdgeCallback_ = callback;
+    risingEdgeCallbackData_ = data;
+  }
+
+ public:
+  TransitionCallback risingEdgeCallback_ = nullptr;
+  void *risingEdgeCallbackData_ = nullptr;
+  TransitionCallback fallingEdgeCallback_ = nullptr;
+  void *fallingEdgeCallbackData_ = nullptr;
 };
 }  // namespace Clef::If
