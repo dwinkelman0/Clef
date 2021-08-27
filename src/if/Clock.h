@@ -12,7 +12,7 @@ namespace Clef::If {
  */
 class Clock : public Clef::Util::Initialized {
  public:
-  using Micros = Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC>;
-  virtual Micros getMicros() const = 0;
+  virtual Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> getMicros()
+      const = 0;
 };
 }  // namespace Clef::If

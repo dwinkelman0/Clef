@@ -12,14 +12,15 @@ class Clock : public Clef::If::Clock {
  public:
   Clock(GenericTimer<uint16_t> &timer);
   bool init() override;
-  Micros getMicros() const override;
+  Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> getMicros()
+      const override;
 
  private:
   static void incrementNumMiddles(void *args);
   static void incrementNumEnds(void *args);
 
   GenericTimer<uint16_t> &timer_;
-  uint32_t numMiddles_ = 0;
-  uint32_t numEnds_ = 0;
+  uint32_t numMiddles_;
+  uint32_t numEnds_;
 };
 }  // namespace Clef::Impl::Atmega2560
