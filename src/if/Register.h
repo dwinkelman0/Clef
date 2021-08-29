@@ -10,6 +10,7 @@ namespace Clef::If {
 template <typename DType>
 class RRegister {
  public:
+  virtual void init() = 0;
   virtual DType read() const = 0;
 };
 
@@ -19,12 +20,8 @@ class RRegister {
 template <typename DType>
 class WRegister {
  public:
+  virtual void init() = 0;
   virtual void write(const DType value) = 0;
+  virtual DType getCurrentState() const = 0;
 };
-
-/**
- * Abstraction of a read-write register.
- */
-template <typename DType>
-class RWRegister : public RRegister<DType>, public WRegister<DType> {};
 }  // namespace Clef::If

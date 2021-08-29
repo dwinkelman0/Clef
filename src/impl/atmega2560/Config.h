@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <fw/Config.h>
+
 /**
  * General configuration for the Atmega2560 chip in an Arduino.
  */

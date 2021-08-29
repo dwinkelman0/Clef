@@ -50,10 +50,8 @@ class Null : public Action {
 class MoveXY : public Action {
  public:
   MoveXY(const Axes::XYZEPosition &startPosition,
-         const Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM>
-             *const endPositionX,
-         const Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM>
-             *const endPositionY);
+         const Axes::XAxis::GcodePosition *const endPositionX,
+         const Axes::YAxis::GcodePosition *const endPositionY);
 };
 
 class MoveXYE : public Action {
@@ -64,14 +62,10 @@ class MoveXYE : public Action {
    * Add a point in the extrusion path; returns false if there was not room in
    * the queue to add another point.
    */
-  bool pushPoint(
-      ActionQueue &actionQueue, XYEPositionQueue &xyePositionQueue,
-      const Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM>
-          *const endPositionX,
-      const Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM>
-          *const endPositionY,
-      const Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM>
-          endPositionE);
+  bool pushPoint(ActionQueue &actionQueue, XYEPositionQueue &xyePositionQueue,
+                 const Axes::XAxis::GcodePosition *const endPositionX,
+                 const Axes::YAxis::GcodePosition *const endPositionY,
+                 const Axes::EAxis::GcodePosition endPositionE);
   uint16_t getNumPoints() const;
 
  private:
@@ -81,15 +75,13 @@ class MoveXYE : public Action {
 class MoveE : public Action {
  public:
   MoveE(const Axes::XYZEPosition &startPosition,
-        const Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM>
-            endPositionE);
+        const Axes::EAxis::GcodePosition endPositionE);
 };
 
 class MoveZ : public Action {
  public:
   MoveZ(const Axes::XYZEPosition &startPosition,
-        const Axes::ZAxis::Position<float, Clef::Util::PositionUnit::MM>
-            endPositionZ);
+        const Axes::ZAxis::GcodePosition endPositionZ);
 };
 
 class SetFeedrate : public Action {

@@ -4,6 +4,7 @@
 
 #include <avr/io.h>
 #include <if/PwmTimer.h>
+#include <impl/atmega2560/AvrUtils.h>
 #include <stdint.h>
 
 namespace Clef::Impl::Atmega2560 {
@@ -49,9 +50,6 @@ class GenericTimer : public Clef::If::PwmTimer, public HardwareTimer<DType> {
  */
 template class GenericTimer<uint8_t>;
 template class GenericTimer<uint16_t>;
-
-#define REG2(PREFIX, N) PREFIX##N
-#define REG3(PREFIX, N, POSTFIX) PREFIX##N##POSTFIX
 
 /**
  * Create classes which are essentially wrappers around timer registers.

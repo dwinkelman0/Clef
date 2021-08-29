@@ -14,10 +14,8 @@ Axes::XYZEPosition Action::getEndPosition() const { return endPosition_; }
 Null::Null() : Action(Type::NULL_ACTION, {0, 0, 0, 0}) {}
 
 MoveXY::MoveXY(const Axes::XYZEPosition &startPosition,
-               const Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM>
-                   *const endPositionX,
-               const Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM>
-                   *const endPositionY)
+               const Axes::XAxis::GcodePosition *const endPositionX,
+               const Axes::YAxis::GcodePosition *const endPositionY)
     : Action(Type::MOVE_XY, startPosition) {
   if (endPositionX) {
     endPosition_.x = Axes::XYZEPosition::XPosition(static_cast<int32_t>(
@@ -34,14 +32,11 @@ MoveXY::MoveXY(const Axes::XYZEPosition &startPosition,
 MoveXYE::MoveXYE(const Axes::XYZEPosition &startPosition)
     : Action(Type::MOVE_XYE, startPosition), numPoints_(0) {}
 
-bool MoveXYE::pushPoint(
-    ActionQueue &actionQueue, XYEPositionQueue &xyePositionQueue,
-    const Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM>
-        *const endPositionX,
-    const Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM>
-        *const endPositionY,
-    const Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM>
-        endPositionE) {
+bool MoveXYE::pushPoint(ActionQueue &actionQueue,
+                        XYEPositionQueue &xyePositionQueue,
+                        const Axes::XAxis::GcodePosition *const endPositionX,
+                        const Axes::YAxis::GcodePosition *const endPositionY,
+                        const Axes::EAxis::GcodePosition endPositionE) {
   // Update end position but do not commit to state until a point is
   // successfully pushed to the queue.
   Axes::XYZEPosition tempEndPosition = getEndPosition();
@@ -75,8 +70,7 @@ bool MoveXYE::pushPoint(
 uint16_t MoveXYE::getNumPoints() const { return numPoints_; }
 
 MoveE::MoveE(const Axes::XYZEPosition &startPosition,
-             const Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM>
-                 endPositionE)
+             const Axes::EAxis::GcodePosition endPositionE)
     : Action(Type::MOVE_E, startPosition) {
   endPosition_.e = Axes::XYZEPosition::EPosition(static_cast<int32_t>(
       *Axes::EAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
@@ -84,8 +78,7 @@ MoveE::MoveE(const Axes::XYZEPosition &startPosition,
 }
 
 MoveZ::MoveZ(const Axes::XYZEPosition &startPosition,
-             const Axes::ZAxis::Position<float, Clef::Util::PositionUnit::MM>
-                 endPositionZ)
+             const Axes::ZAxis::GcodePosition endPositionZ)
     : Action(Type::MOVE_Z, startPosition) {
   endPosition_.z = Axes::XYZEPosition::ZPosition(static_cast<int32_t>(
       *Axes::ZAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
