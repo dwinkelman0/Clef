@@ -3,11 +3,6 @@
 #include "Axes.h"
 
 namespace Clef::Fw {
-template <uint32_t USTEPS_PER_MM>
-Axis<USTEPS_PER_MM>::Axis(Clef::If::Stepper<USTEPS_PER_MM> &stepper,
-                          Clef::If::PwmTimer &pwmTimer)
-    : stepper_(stepper), pwmTimer_(pwmTimer) {}
-
 bool Axes::XYEPosition::operator==(const XYEPosition &other) const {
   return x == other.x && y == other.y && e == other.e;
 }

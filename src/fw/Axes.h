@@ -14,35 +14,103 @@ template <uint32_t USTEPS_PER_MM>
 class Axis : public Clef::Util::Initialized {
  public:
   static const uint32_t UstepsPerMm = USTEPS_PER_MM;
+
   template <typename DType, Clef::Util::PositionUnit PositionU>
   using Position = Clef::Util::Position<DType, PositionU, USTEPS_PER_MM>;
   using GcodePosition =
       Clef::Util::Position<float, Clef::Util::PositionUnit::MM, USTEPS_PER_MM>;
-  using StepperPosition = typename Clef::If::Stepper<USTEPS_PER_MM>::Position;
+  using StepperPosition =
+      Clef::Util::Position<int32_t, Clef::Util::PositionUnit::USTEP,
+                           USTEPS_PER_MM>;
   using Feedrate =
-      Clef::Util::Feedrate<float, Clef::Util::PositionUnit::MM,
-                           Clef::Util::TimeUnit::MIN, USTEPS_PER_MM>;
+      Clef::Util::Feedrate<float, Clef::Util::PositionUnit::USTEP,
+                           Clef::Util::TimeUnit::SEC, USTEPS_PER_MM>;
 
-  Axis(Clef::If::Stepper<USTEPS_PER_MM> &stepper, Clef::If::PwmTimer &pwmTimer);
+  Axis(Clef::If::Stepper<USTEPS_PER_MM> &stepper, Clef::If::PwmTimer &pwmTimer)
+      : stepper_(stepper), pwmTimer_(pwmTimer) {}
 
-  bool init() override;
+  bool init() override {
+    stepper_.init();
+    pwmTimer_.init();
+    pwmTimer_.setRisingEdgeCallback(onRisingEdge, this);
+    pwmTimer_.setFallingEdgeCallback(onFallingEdge, this);
+    pwmTimer_.enable();
+    return true;
+  }
 
-  void acquire();
-  void release();
-  void releaseAll();
+  void acquire() { stepper_.acquire(); }
 
-  void setTargetPosition(const StepperPosition pos);
-  StepperPosition getCurrentPos() const;
-  void setFeedrate(const Feedrate feedrate);
+  void release() { stepper_.release(); }
+
+  void releaseAll() { stepper_.releaseAll(); }
+
+  void setTargetPosition(const StepperPosition position) {
+    stepper_.setTargetPosition(position);
+  }
+
+  StepperPosition getPosition() const { return stepper_.getPosition(); }
+
+  bool isAtTargetPosition() const { return stepper_.isAtTargetPosition(); }
+
+  void setFeedrate(const Feedrate feedrate) {
+    using Resolution = typename Clef::If::Stepper<USTEPS_PER_MM>::Resolution;
+    const Clef::Util::Frequency maxFrequency(MAX_STEPPER_FREQ);
+    Clef::Util::Frequency feedrateFrequency(
+        (Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
+                              USTEPS_PER_MM>(1.0f) /
+         feedrate)
+            .asFrequency());
+    Resolution resolution = Resolution::_32;
+    Clef::Util::Frequency pulseFrequency(feedrateFrequency);
+    if (feedrateFrequency < maxFrequency) {
+    } else if (feedrateFrequency < (maxFrequency * 2)) {
+      resolution = Resolution::_16;
+      pulseFrequency = feedrateFrequency / 2;
+    } else if (feedrateFrequency < (maxFrequency * 4)) {
+      resolution = Resolution::_8;
+      pulseFrequency = feedrateFrequency / 4;
+    } else if (feedrateFrequency < (maxFrequency * 8)) {
+      resolution = Resolution::_4;
+      pulseFrequency = feedrateFrequency / 8;
+    } else if (feedrateFrequency < (maxFrequency * 16)) {
+      resolution = Resolution::_2;
+      pulseFrequency = feedrateFrequency / 16;
+    } else {
+      resolution = Resolution::_1;
+      pulseFrequency = feedrateFrequency / 32;
+    }
+    stepper_.setResolution(resolution);
+    pwmTimer_.setFrequency(pulseFrequency);
+  }
 
  private:
+  static void onRisingEdge(void *arg) {
+    Clef::Fw::Axis<USTEPS_PER_MM> *axis =
+        reinterpret_cast<Clef::Fw::Axis<USTEPS_PER_MM> *>(arg);
+    axis->stepper_.pulse();
+  }
+
+  static void onFallingEdge(void *arg) {
+    Clef::Fw::Axis<USTEPS_PER_MM> *axis =
+        reinterpret_cast<Clef::Fw::Axis<USTEPS_PER_MM> *>(arg);
+    axis->stepper_.unpulse();
+    if (axis->stepper_.isAtTargetPosition()) {
+      axis->pwmTimer_.disable();
+    }
+  }
+
   Clef::If::Stepper<USTEPS_PER_MM> &stepper_;
   Clef::If::PwmTimer &pwmTimer_;
 };
 
-class Axes {
+class Axes : public Clef::Util::Initialized {
  public:
-  class XAxis : public Axis<USTEPS_PER_MM_X> {};
+  class XAxis : public Axis<USTEPS_PER_MM_X> {
+   public:
+    XAxis(Clef::If::Stepper<USTEPS_PER_MM_X> &stepper,
+          Clef::If::PwmTimer &pwmTimer)
+        : Axis(stepper, pwmTimer) {}
+  };
   class YAxis : public Axis<USTEPS_PER_MM_Y> {};
   class ZAxis : public Axis<USTEPS_PER_MM_Z> {};
   class EAxis : public Axis<USTEPS_PER_MM_E> {};
@@ -87,6 +155,8 @@ class Axes {
   const XAxis &getZ() const;
   XAxis &getE();
   const XAxis &getE() const;
+
+  bool init() override;
 
  private:
   XAxis &x_;

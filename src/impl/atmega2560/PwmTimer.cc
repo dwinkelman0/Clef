@@ -9,6 +9,7 @@ namespace Clef::Impl::Atmega2560 {
 template <typename DType>
 bool GenericTimer<DType>::init() {
   if (Clef::Util::Initialized::init()) {
+    DisableInterrupts noInterrupts();
     this->initRegs();
     return true;
   }
