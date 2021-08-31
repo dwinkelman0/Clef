@@ -101,4 +101,7 @@ bool Stepper<Config>::isAtTargetPosition() const {
 }
 
 XAxisStepper xAxisStepper;
+YAxisStepper yAxisStepper;
+ZAxisStepper zAxisStepper;
+EAxisStepper eAxisStepper;
 }  // namespace Clef::Impl::Atmega2560

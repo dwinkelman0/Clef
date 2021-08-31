@@ -229,7 +229,7 @@ bool GcodeParser::handleG1(const uint16_t errorBufferSize,
     if (hasE) {
       ActionQueue::Iterator lastAction = actionQueue_.last();
       Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM> eMms(e);
-      if (lastAction && (*lastAction)->getType() == Action::Type::MOVE_XYE) {
+      if (lastAction && lastAction->getType() == Action::Type::MOVE_XYE) {
         // If the last action in the queue is MoveXYE, coalesce
         lastAction->getVariant().moveXye.pushPoint(
             actionQueue_, xyePositionQueue_, hasX ? &xMms : nullptr,

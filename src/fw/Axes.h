@@ -32,8 +32,6 @@ class Axis : public Clef::Util::Initialized {
   bool init() override {
     stepper_.init();
     pwmTimer_.init();
-    pwmTimer_.setRisingEdgeCallback(onRisingEdge, this);
-    pwmTimer_.setFallingEdgeCallback(onFallingEdge, this);
     pwmTimer_.enable();
     return true;
   }
@@ -45,6 +43,8 @@ class Axis : public Clef::Util::Initialized {
   void releaseAll() { stepper_.releaseAll(); }
 
   void setTargetPosition(const StepperPosition position) {
+    pwmTimer_.setRisingEdgeCallback(onRisingEdge, this);
+    pwmTimer_.setFallingEdgeCallback(onFallingEdge, this);
     stepper_.setTargetPosition(position);
   }
 
@@ -105,15 +105,10 @@ class Axis : public Clef::Util::Initialized {
 
 class Axes : public Clef::Util::Initialized {
  public:
-  class XAxis : public Axis<USTEPS_PER_MM_X> {
-   public:
-    XAxis(Clef::If::Stepper<USTEPS_PER_MM_X> &stepper,
-          Clef::If::PwmTimer &pwmTimer)
-        : Axis(stepper, pwmTimer) {}
-  };
-  class YAxis : public Axis<USTEPS_PER_MM_Y> {};
-  class ZAxis : public Axis<USTEPS_PER_MM_Z> {};
-  class EAxis : public Axis<USTEPS_PER_MM_E> {};
+  using XAxis = Axis<USTEPS_PER_MM_X>;
+  using YAxis = Axis<USTEPS_PER_MM_Y>;
+  using ZAxis = Axis<USTEPS_PER_MM_Z>;
+  using EAxis = Axis<USTEPS_PER_MM_E>;
 
   struct XYEPosition {
     using XPosition = XAxis::StepperPosition;
@@ -146,15 +141,15 @@ class Axes : public Clef::Util::Initialized {
   static const XYEPosition originXye;
   static const XYZEPosition originXyze;
 
-  Axes(XAxis &x, YAxis &y, ZAxis &z, EAxis &e);
-  XAxis &getX();
-  const XAxis &getX() const;
-  XAxis &getY();
-  const XAxis &getY() const;
-  XAxis &getZ();
-  const XAxis &getZ() const;
-  XAxis &getE();
-  const XAxis &getE() const;
+  Axes(XAxis &x, YAxis &y, ZAxis &z, EAxis &e) : x_(x), y_(y), z_(z), e_(e) {}
+  XAxis &getX() { return x_; }
+  const XAxis &getX() const { return x_; }
+  YAxis &getY() { return y_; }
+  const YAxis &getY() const { return y_; }
+  ZAxis &getZ() { return z_; }
+  const ZAxis &getZ() const { return z_; }
+  EAxis &getE() { return e_; }
+  const EAxis &getE() const { return e_; }
 
   bool init() override;
 

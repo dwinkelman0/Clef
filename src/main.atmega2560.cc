@@ -17,14 +17,21 @@ Clef::Fw::XYEPositionQueue xyePositionQueue;
 Clef::Fw::GcodeParser gcodeParser(serial, actionQueue, xyePositionQueue);
 Clef::Fw::Axes::XAxis xAxis(Clef::Impl::Atmega2560::xAxisStepper,
                             Clef::Impl::Atmega2560::xAxisTimer);
+Clef::Fw::Axes::YAxis yAxis(Clef::Impl::Atmega2560::yAxisStepper,
+                            Clef::Impl::Atmega2560::yAxisTimer);
+Clef::Fw::Axes::ZAxis zAxis(Clef::Impl::Atmega2560::zAxisStepper,
+                            Clef::Impl::Atmega2560::zeAxisTimer);
+Clef::Fw::Axes::EAxis eAxis(Clef::Impl::Atmega2560::eAxisStepper,
+                            Clef::Impl::Atmega2560::zeAxisTimer);
+Clef::Fw::Axes axes(xAxis, yAxis, zAxis, eAxis);
 
 void status(void *arg) {
+  Clef::Impl::Atmega2560::EnableInterrupts interrupts();
   char buffer[64];
-  sprintf(buffer, "Position = %ld", *xAxis.getPosition());
-  {
-    Clef::Impl::Atmega2560::DisableInterrupts noInterrupts();
-    serial.writeLine(buffer);
-  }
+  sprintf(buffer, "Position = (%ld, %ld, %ld, %ld)", *axes.getX().getPosition(),
+          *axes.getY().getPosition(), *axes.getZ().getPosition(),
+          *axes.getE().getPosition());
+  serial.writeLine(buffer);
 }
 
 int main() {
@@ -32,14 +39,16 @@ int main() {
     serial.writeLine("Initialized clock");
   }
   gcodeParser.init();
-  xAxis.init();
-  xAxis.setFeedrate(100000.0f);
-  xAxis.setTargetPosition(1000000.0f);
+  axes.init();
+  axes.getY().setFeedrate(100000.0f);
+  axes.getY().setTargetPosition(1000000.0f);
+  axes.getX().setFeedrate(60000.0f);
+  axes.getX().setTargetPosition(600000.f);
 
-  Clef::Impl::Atmega2560::yAxisTimer.init();
-  Clef::Impl::Atmega2560::yAxisTimer.setFrequency(1.0f);
-  Clef::Impl::Atmega2560::yAxisTimer.setRisingEdgeCallback(status, nullptr);
-  Clef::Impl::Atmega2560::yAxisTimer.enable();
+  Clef::Impl::Atmega2560::zeAxisTimer.init();
+  Clef::Impl::Atmega2560::zeAxisTimer.setFrequency(4.0f);
+  Clef::Impl::Atmega2560::zeAxisTimer.setRisingEdgeCallback(status, nullptr);
+  Clef::Impl::Atmega2560::zeAxisTimer.enable();
 
   while (1) {
     gcodeParser.ingest();

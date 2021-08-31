@@ -92,79 +92,79 @@ SetFeedrate::SetFeedrate(const Axes::XYZEPosition &startPosition,
 
 ActionVariant::ActionVariant() : ActionVariant(theNullAction_) {}
 
-ActionVariant::ActionVariant(const Action &action)
-    : variants_(action), type_(action.getType()) {}
+ActionVariant::ActionVariant(const Action &action) : type_(action.getType()) {
+  switch (action.getType()) {
+    case Type::NULL_ACTION:
+      variants_.null = static_cast<const Null &>(action);
+      break;
+    case Type::MOVE_XY:
+      variants_.moveXy = static_cast<const MoveXY &>(action);
+      break;
+    case Type::MOVE_XYE:
+      variants_.moveXye = static_cast<const MoveXYE &>(action);
+      break;
+    case Type::MOVE_E:
+      variants_.moveE = static_cast<const MoveE &>(action);
+      break;
+    case Type::MOVE_Z:
+      variants_.moveZ = static_cast<const MoveZ &>(action);
+      break;
+    case Type::SET_FEEDRATE:
+      variants_.setFeedrate = static_cast<const SetFeedrate &>(action);
+      break;
+  }
+}
+
+ActionVariant &ActionVariant::operator=(const ActionVariant &other) {
+  switch (other.type_) {
+    case Type::NULL_ACTION:
+      variants_.null = other.variants_.null;
+      break;
+    case Type::MOVE_XY:
+      variants_.moveXy = other.variants_.moveXy;
+      break;
+    case Type::MOVE_XYE:
+      variants_.moveXye = other.variants_.moveXye;
+      break;
+    case Type::MOVE_E:
+      variants_.moveE = other.variants_.moveE;
+      break;
+    case Type::MOVE_Z:
+      variants_.moveZ = other.variants_.moveZ;
+      break;
+    case Type::SET_FEEDRATE:
+      variants_.setFeedrate = other.variants_.setFeedrate;
+      break;
+  }
+  type_ = other.type_;
+  return *this;
+}
+
+Action &ActionVariant::getAction() {
+  return const_cast<Action &>(
+      const_cast<const ActionVariant *>(this)->getAction());
+}
+
+const Action &ActionVariant::getAction() const {
+  switch (type_) {
+    case Type::NULL_ACTION:
+      return variants_.null;
+    case Type::MOVE_XY:
+      return variants_.moveXy;
+    case Type::MOVE_XYE:
+      return variants_.moveXye;
+    case Type::MOVE_E:
+      return variants_.moveE;
+    case Type::MOVE_Z:
+      return variants_.moveZ;
+    case Type::SET_FEEDRATE:
+      return variants_.setFeedrate;
+  }
+}
 
 ActionVariant::Variants &ActionVariant::getVariant() { return variants_; }
 
-const ActionVariant::Variants &ActionVariant::getVariant() const {
-  return variants_;
-}
-
-Action &ActionVariant::operator*() { return *(operator->()); }
-
-const Action &ActionVariant::operator*() const { return *(operator->()); }
-
-Action *ActionVariant::operator->() {
-  switch (type_) {
-    case Type::NULL_ACTION:
-      return nullptr;
-    case Type::MOVE_XY:
-      return dynamic_cast<Action *>(&variants_.moveXy);
-    case Type::MOVE_XYE:
-      return dynamic_cast<Action *>(&variants_.moveXye);
-    case Type::MOVE_E:
-      return dynamic_cast<Action *>(&variants_.moveE);
-    case Type::MOVE_Z:
-      return dynamic_cast<Action *>(&variants_.moveZ);
-    case Type::SET_FEEDRATE:
-      return dynamic_cast<Action *>(&variants_.setFeedrate);
-    default:
-      return nullptr;
-  }
-}
-
-const Action *ActionVariant::operator->() const {
-  switch (type_) {
-    case Type::NULL_ACTION:
-      return nullptr;
-    case Type::MOVE_XY:
-      return dynamic_cast<const Action *>(&variants_.moveXy);
-    case Type::MOVE_XYE:
-      return dynamic_cast<const Action *>(&variants_.moveXye);
-    case Type::MOVE_E:
-      return dynamic_cast<const Action *>(&variants_.moveE);
-    case Type::MOVE_Z:
-      return dynamic_cast<const Action *>(&variants_.moveZ);
-    case Type::SET_FEEDRATE:
-      return dynamic_cast<const Action *>(&variants_.setFeedrate);
-    default:
-      return nullptr;
-  }
-}
-
-ActionVariant::Variants::Variants(const Action &action) {
-  switch (action.getType()) {
-    case Type::NULL_ACTION:
-      null = static_cast<const Null &>(action);
-      break;
-    case Type::MOVE_XY:
-      moveXy = static_cast<const MoveXY &>(action);
-      break;
-    case Type::MOVE_XYE:
-      moveXye = static_cast<const MoveXYE &>(action);
-      break;
-    case Type::MOVE_E:
-      moveE = static_cast<const MoveE &>(action);
-      break;
-    case Type::MOVE_Z:
-      moveZ = static_cast<const MoveZ &>(action);
-      break;
-    case Type::SET_FEEDRATE:
-      setFeedrate = static_cast<const SetFeedrate &>(action);
-      break;
-  }
-}
+Type ActionVariant::getType() const { return type_; }
 
 Null ActionVariant::theNullAction_;
 }  // namespace Action

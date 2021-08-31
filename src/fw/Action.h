@@ -3,15 +3,26 @@
 #pragma once
 
 #include <fw/Axes.h>
+#include <if/Clock.h>
+#include <if/Serial.h>
 #include <util/PooledQueue.h>
 #include <util/Units.h>
 
 namespace Clef::Fw {
-
 class XYEPositionQueue
     : public Clef::Util::PooledQueue<Axes::XYEPosition, 128> {};
 
 class ActionQueue;
+class GcodeParser;
+
+struct Context {
+  Clef::Fw::Axes &axes;
+  Clef::Fw::GcodeParser &gcodeParser;
+  Clef::Fw::ActionQueue &actionQueue;
+  Clef::Fw::XYEPositionQueue &xyePositionQueue;
+  Clef::If::Clock &clock;
+  Clef::If::RWSerial &serial;
+};
 
 namespace Action {
 enum class Type {
@@ -37,6 +48,8 @@ class Action {
   Type getType() const;
   Axes::XYZEPosition getEndPosition() const;
 
+  virtual void onStart(Context &context) = 0;
+
  protected:
   Type type_;
   Axes::XYZEPosition endPosition_;
@@ -45,6 +58,8 @@ class Action {
 class Null : public Action {
  public:
   Null();
+
+  void onStart(Context &context) override {}
 };
 
 class MoveXY : public Action {
@@ -52,6 +67,8 @@ class MoveXY : public Action {
   MoveXY(const Axes::XYZEPosition &startPosition,
          const Axes::XAxis::GcodePosition *const endPositionX,
          const Axes::YAxis::GcodePosition *const endPositionY);
+
+  void onStart(Context &context) override {}
 };
 
 class MoveXYE : public Action {
@@ -68,6 +85,8 @@ class MoveXYE : public Action {
                  const Axes::EAxis::GcodePosition endPositionE);
   uint16_t getNumPoints() const;
 
+  void onStart(Context &context) override {}
+
  private:
   uint16_t numPoints_;
 };
@@ -76,18 +95,24 @@ class MoveE : public Action {
  public:
   MoveE(const Axes::XYZEPosition &startPosition,
         const Axes::EAxis::GcodePosition endPositionE);
+
+  void onStart(Context &context) override {}
 };
 
 class MoveZ : public Action {
  public:
   MoveZ(const Axes::XYZEPosition &startPosition,
         const Axes::ZAxis::GcodePosition endPositionZ);
+
+  void onStart(Context &context) override {}
 };
 
 class SetFeedrate : public Action {
  public:
   SetFeedrate(const Axes::XYZEPosition &startPosition,
               const float rawFeedrateMMs);
+
+  void onStart(Context &context) override {}
 
  private:
   float rawFeedrateMMs_;
@@ -96,7 +121,7 @@ class SetFeedrate : public Action {
 class ActionVariant {
  public:
   union Variants {
-    Variants(const Action &action);
+    Variants() {}
     Null null;
     MoveXY moveXy;
     MoveXYE moveXye;
@@ -107,12 +132,13 @@ class ActionVariant {
 
   ActionVariant();
   ActionVariant(const Action &action);
+  ActionVariant &operator=(const ActionVariant &other);
+
+  Action &getAction();
+  const Action &getAction() const;
   Variants &getVariant();
   const Variants &getVariant() const;
-  Action &operator*();
-  const Action &operator*() const;
-  Action *operator->();
-  const Action *operator->() const;
+  Type getType() const;
 
  private:
   Variants variants_;

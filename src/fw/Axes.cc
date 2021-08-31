@@ -22,4 +22,12 @@ bool Axes::XYZEPosition::operator!=(const XYZEPosition &other) const {
 Axes::XYEPosition Axes::XYZEPosition::asXyePosition() const {
   return {x, y, e};
 }
+
+bool Axes::init() {
+  x_.init();
+  y_.init();
+  z_.init();
+  e_.init();
+  return true;
+}
 }  // namespace Clef::Fw
