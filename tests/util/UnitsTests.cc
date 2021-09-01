@@ -45,5 +45,7 @@ TEST(UnitsTest, FeedrateConversions) {
       Time<float, TimeUnit::MIN>(5.0f / 60) * fr);
   ASSERT_FLOAT_EQ(*mms1, *mms2);
   ASSERT_FLOAT_EQ(*mms1, *(Position<float, PositionUnit::MM, 400>(100)));
+  Feedrate<float, PositionUnit::USTEP, TimeUnit::SEC, 400> fr2(fr);
+  ASSERT_FLOAT_EQ(*fr2, *fr * 400 / 60.0f);
 }
 }  // namespace Clef::Util

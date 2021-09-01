@@ -248,6 +248,13 @@ class Feedrate : public GenericUnit<DType, static_cast<uint32_t>(PositionU) *
   constexpr Feedrate(const PositionType dx, const FrequencyType freq)
       : MatchingGeneric(*dx * *freq) {}
   constexpr Feedrate(const MatchingGeneric gen) : MatchingGeneric(gen) {}
+  template <PositionUnit PositionU2, TimeUnit TimeU2>
+  operator Feedrate<DType, PositionU2, TimeU2, USTEPS_PER_MM>() const {
+    return Feedrate<DType, PositionU2, TimeU2, USTEPS_PER_MM>(
+        Position<DType, PositionU2, USTEPS_PER_MM>(
+            *this * Time<DType, TimeU>(Time<DType, TimeU2>(1.0f))),
+        Time<DType, TimeU2>(1.0f));
+  }
 };
 
 template <typename DType, PositionUnit PositionU, TimeUnit TimeU,

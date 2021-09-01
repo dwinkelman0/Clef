@@ -19,12 +19,10 @@ class Axis : public Clef::Util::Initialized {
   using Position = Clef::Util::Position<DType, PositionU, USTEPS_PER_MM>;
   using GcodePosition =
       Clef::Util::Position<float, Clef::Util::PositionUnit::MM, USTEPS_PER_MM>;
-  using StepperPosition =
-      Clef::Util::Position<int32_t, Clef::Util::PositionUnit::USTEP,
-                           USTEPS_PER_MM>;
-  using Feedrate =
-      Clef::Util::Feedrate<float, Clef::Util::PositionUnit::USTEP,
-                           Clef::Util::TimeUnit::SEC, USTEPS_PER_MM>;
+  using StepperPosition = typename Clef::If::Stepper<USTEPS_PER_MM>::Position;
+  using GcodeFeedrate =
+      Clef::Util::Feedrate<float, Clef::Util::PositionUnit::MM,
+                           Clef::Util::TimeUnit::MIN, USTEPS_PER_MM>;
 
   Axis(Clef::If::Stepper<USTEPS_PER_MM> &stepper, Clef::If::PwmTimer &pwmTimer)
       : stepper_(stepper), pwmTimer_(pwmTimer) {}
@@ -52,13 +50,16 @@ class Axis : public Clef::Util::Initialized {
 
   bool isAtTargetPosition() const { return stepper_.isAtTargetPosition(); }
 
-  void setFeedrate(const Feedrate feedrate) {
+  void setFeedrate(const GcodeFeedrate feedrate) {
     using Resolution = typename Clef::If::Stepper<USTEPS_PER_MM>::Resolution;
     const Clef::Util::Frequency maxFrequency(MAX_STEPPER_FREQ);
+    Clef::Util::Feedrate<float, Clef::Util::PositionUnit::USTEP,
+                         Clef::Util::TimeUnit::SEC, USTEPS_PER_MM>
+        stepperFeedrate(feedrate);
     Clef::Util::Frequency feedrateFrequency(
         (Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
                               USTEPS_PER_MM>(1.0f) /
-         feedrate)
+         stepperFeedrate)
             .asFrequency());
     Resolution resolution = Resolution::_32;
     Clef::Util::Frequency pulseFrequency(feedrateFrequency);
