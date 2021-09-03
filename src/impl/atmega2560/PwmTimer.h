@@ -42,7 +42,16 @@ class GenericTimer : public Clef::If::PwmTimer, public HardwareTimer<DType> {
   bool init() override;
   void enable() override;
   void disable() override;
-  void setFrequency(const Clef::Util::Frequency<float> frequency);
+  void setFrequency(const Clef::Util::Frequency<float> frequency) override;
+  void setRisingEdgeCallback(const TransitionCallback callback,
+                             void *data) override;
+  void setFallingEdgeCallback(const TransitionCallback callback,
+                              void *data) override;
+
+  TransitionCallback risingEdgeCallback_ = nullptr;
+  void *risingEdgeCallbackData_ = nullptr;
+  TransitionCallback fallingEdgeCallback_ = nullptr;
+  void *fallingEdgeCallbackData_ = nullptr;
 };
 
 /**

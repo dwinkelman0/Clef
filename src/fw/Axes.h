@@ -5,6 +5,7 @@
 #include <fw/Config.h>
 #include <if/PwmTimer.h>
 #include <if/Stepper.h>
+#include <math.h>
 #include <stdint.h>
 #include <util/Initialized.h>
 #include <util/Units.h>
@@ -121,6 +122,10 @@ class Axes : public Clef::Util::Initialized {
 
     bool operator==(const XYEPosition &other) const;
     bool operator!=(const XYEPosition &other) const;
+    XYEPosition operator-(const XYEPosition &other) const {
+      return {x - other.x, y - other.y, e - other.e};
+    }
+    float magnitude() const { return sqrt(*x * *x + *y * *y + *e * *e); }
   };
 
   struct XYZEPosition {
@@ -137,12 +142,19 @@ class Axes : public Clef::Util::Initialized {
 
     bool operator==(const XYZEPosition &other) const;
     bool operator!=(const XYZEPosition &other) const;
+    XYZEPosition operator-(const XYZEPosition &other) const {
+      return {x - other.x, y - other.y, z - other.z, e - other.e};
+    }
+    float magnitude() const {
+      return sqrt(*x * *x + *y * *y + *z * *z + *e * *e);
+    }
   };
 
   static const XYEPosition originXye;
   static const XYZEPosition originXyze;
 
-  Axes(XAxis &x, YAxis &y, ZAxis &z, EAxis &e) : x_(x), y_(y), z_(z), e_(e) {}
+  Axes(XAxis &x, YAxis &y, ZAxis &z, EAxis &e)
+      : x_(x), y_(y), z_(z), e_(e), feedrate_(1200.0f) {}
   XAxis &getX() { return x_; }
   const XAxis &getX() const { return x_; }
   YAxis &getY() { return y_; }
@@ -153,11 +165,20 @@ class Axes : public Clef::Util::Initialized {
   const EAxis &getE() const { return e_; }
 
   bool init() override;
+  void setFeedrate(const XAxis::GcodeFeedrate feedrate) {
+    feedrate_ = feedrate;
+  }
+  XAxis::GcodeFeedrate getFeedrate() const { return feedrate_; }
+  XYZEPosition getPosition() const {
+    return {x_.getPosition(), y_.getPosition(), z_.getPosition(),
+            e_.getPosition()};
+  }
 
  private:
   XAxis &x_;
   YAxis &y_;
   ZAxis &z_;
   EAxis &e_;
+  XAxis::GcodeFeedrate feedrate_;
 };
 }  // namespace Clef::Fw

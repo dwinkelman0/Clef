@@ -26,19 +26,9 @@ class PwmTimer : public Clef::Util::Initialized {
   virtual void disable() = 0;
 
   virtual void setFrequency(const Clef::Util::Frequency<float> frequency) = 0;
-  void setRisingEdgeCallback(const TransitionCallback callback, void *data) {
-    risingEdgeCallback_ = callback;
-    risingEdgeCallbackData_ = data;
-  }
-  void setFallingEdgeCallback(const TransitionCallback callback, void *data) {
-    fallingEdgeCallback_ = callback;
-    fallingEdgeCallbackData_ = data;
-  }
-
- public:
-  TransitionCallback risingEdgeCallback_ = nullptr;
-  void *risingEdgeCallbackData_ = nullptr;
-  TransitionCallback fallingEdgeCallback_ = nullptr;
-  void *fallingEdgeCallbackData_ = nullptr;
+  virtual void setRisingEdgeCallback(const TransitionCallback callback,
+                                     void *data) = 0;
+  virtual void setFallingEdgeCallback(const TransitionCallback callback,
+                                      void *data) = 0;
 };
 }  // namespace Clef::If

@@ -117,7 +117,7 @@ else ()
     file (GLOB FW_EMULATOR_IF_SOURCES src/impl/emulator/*.cc)
 
     # Tests target
-    file (GLOB TESTS_SOURCES tests/main.cc tests/util/*.cc tests/fw/*.cc)
+    file (GLOB TESTS_SOURCES tests/main.cc tests/util/*.cc tests/fw/*.cc tests/impl/emulator/*.cc)
     add_executable (${Target_tests} ${TESTS_SOURCES} ${FW_EMULATOR_IF_SOURCES} ${FW_COMMON_IF_SOURCES})
     target_link_libraries (${Target_tests} gtest_main)
 

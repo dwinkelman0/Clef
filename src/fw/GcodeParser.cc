@@ -21,27 +21,13 @@ STRING(INVALID_G_CODE_ERROR, "invalid_g_code_error");
 STRING(INSUFFICIENT_QUEUE_CAPACITY_ERROR, "alloc_error");
 }  // namespace Str
 
-GcodeParser::GcodeParser(Clef::If::RWSerial &serial, ActionQueue &actionQueue,
-                         XYEPositionQueue &xyePositionQueue)
-    : serial_(serial),
-      actionQueue_(actionQueue),
-      xyePositionQueue_(xyePositionQueue) {
-  reset();
-}
+GcodeParser::GcodeParser() { reset(); }
 
-bool GcodeParser::init() {
-  if (Clef::Util::Initialized::init()) {
-    serial_.init();
-    return true;
-  }
-  return false;
-}
-
-void GcodeParser::ingest() {
+void GcodeParser::ingest(Context &context) {
   const uint16_t errorBufferSize = 64;
   char errorBuffer[errorBufferSize];
   char newChar;
-  while (serial_.read(&newChar)) {
+  while (context.serial.read(&newChar)) {
     if (newChar == '\n') {
       commentMode_ = false;
       // Process the line
@@ -53,14 +39,14 @@ void GcodeParser::ingest() {
           }
         }
         if (anyCodes) {
-          if (interpret(errorBufferSize, errorBuffer)) {
-            serial_.writeLine(Str::OK);
+          if (interpret(context, errorBufferSize, errorBuffer)) {
+            context.serial.writeLine(Str::OK);
           } else {
-            serial_.writeLine(errorBuffer);
+            context.serial.writeLine(errorBuffer);
           }
         }
       } else {
-        serial_.writeLine(errorBuffer);
+        context.serial.writeLine(errorBuffer);
       }
       reset();
     } else if (newChar == ';') {
@@ -70,12 +56,12 @@ void GcodeParser::ingest() {
       // Add the char to the buffer
       if (!append(newChar)) {
         // Flush the buffer until a new line is detected
-        while ((newChar = serial_.read(&newChar))) {
+        while ((newChar = context.serial.read(&newChar))) {
           if (newChar == '\n') {
             break;
           }
         }
-        serial_.writeLine(Str::BUFFER_OVERFLOW_ERROR);
+        context.serial.writeLine(Str::BUFFER_OVERFLOW_ERROR);
         reset();
       }
     }
@@ -120,7 +106,7 @@ bool GcodeParser::parse(const uint16_t errorBufferSize,
   return true;
 }
 
-bool GcodeParser::interpret(const uint16_t errorBufferSize,
+bool GcodeParser::interpret(Context &context, const uint16_t errorBufferSize,
                             char *const errorBuffer) {
   // Check for a 'G' code
   int32_t gcode;
@@ -128,7 +114,7 @@ bool GcodeParser::interpret(const uint16_t errorBufferSize,
     switch (gcode) {
       case 0:
       case 1:
-        return handleG1(errorBufferSize, errorBuffer);
+        return handleG1(context, errorBufferSize, errorBuffer);
       default:
         snprintf(errorBuffer, errorBufferSize, "%s: %d",
                  Str::INVALID_G_CODE_ERROR, gcode);
@@ -179,7 +165,7 @@ bool GcodeParser::parseFloat(const char code, float *const result,
   return false;
 }
 
-bool GcodeParser::handleG1(const uint16_t errorBufferSize,
+bool GcodeParser::handleG1(Context &context, const uint16_t errorBufferSize,
                            char *const errorBuffer) {
   float x, y, z, e, f;
   bool hasX, hasY, hasZ, hasE, hasF;
@@ -209,8 +195,16 @@ bool GcodeParser::handleG1(const uint16_t errorBufferSize,
   // Determine number of action and xyePosition slots to allocate
   uint8_t numActions = static_cast<uint8_t>(hasF) + static_cast<uint8_t>(hasZ) +
                        static_cast<uint8_t>(hasX || hasY || hasZ);
-  if (actionQueue_.getNumSpacesLeft() < numActions ||
-      (hasE && (hasX || hasY) && xyePositionQueue_.getNumSpacesLeft() == 0)) {
+  if (context.actionQueue.getNumSpacesLeft() < numActions ||
+      (hasZ && !context.actionQueue.hasCapacityFor(Action::Type::MOVE_E)) ||
+      (hasE && !context.actionQueue.hasCapacityFor(Action::Type::MOVE_E)) ||
+      (hasF &&
+       !context.actionQueue.hasCapacityFor(Action::Type::SET_FEEDRATE)) ||
+      (((hasX || hasY) && !hasE) &&
+       !context.actionQueue.hasCapacityFor(Action::Type::MOVE_XY)) ||
+      (((hasX || hasY) && hasE) &&
+       (!context.actionQueue.hasCapacityFor(Action::Type::MOVE_XYE) ||
+        context.xyePositionQueue.getNumSpacesLeft() == 0))) {
     snprintf(errorBuffer, errorBufferSize, "%s",
              Str::INSUFFICIENT_QUEUE_CAPACITY_ERROR);
     return false;
@@ -218,38 +212,42 @@ bool GcodeParser::handleG1(const uint16_t errorBufferSize,
 
   // Enqueue actions
   if (hasF) {
-    actionQueue_.push(Action::SetFeedrate(actionQueue_.getEndPosition(), f));
+    context.actionQueue.push(
+        context, Action::SetFeedrate(context.actionQueue.getEndPosition(), f));
   }
   if (hasZ) {
-    actionQueue_.push(Action::MoveZ(actionQueue_.getEndPosition(), z));
+    context.actionQueue.push(
+        context, Action::MoveZ(context.actionQueue.getEndPosition(), z));
   }
   if (hasX || hasY) {
     Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM> xMms(x);
     Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM> yMms(y);
     if (hasE) {
-      ActionQueue::Iterator lastAction = actionQueue_.last();
+      ActionQueue::Iterator lastAction = context.actionQueue.last();
       Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM> eMms(e);
-      if (lastAction && lastAction->getType() == Action::Type::MOVE_XYE) {
+      if (lastAction && (*lastAction)->getType() == Action::Type::MOVE_XYE) {
         // If the last action in the queue is MoveXYE, coalesce
-        lastAction->getVariant().moveXye.pushPoint(
-            actionQueue_, xyePositionQueue_, hasX ? &xMms : nullptr,
-            hasY ? &yMms : nullptr, eMms);
+        static_cast<Action::MoveXYE *>(*lastAction)
+            ->pushPoint(context, hasX ? &xMms : nullptr, hasY ? &yMms : nullptr,
+                        eMms);
       } else {
         // Otherwise, start a new MoveXYE
-        Action::MoveXYE moveXye(actionQueue_.getEndPosition());
-        moveXye.pushPoint(actionQueue_, xyePositionQueue_,
-                          hasX ? &xMms : nullptr, hasY ? &yMms : nullptr, eMms);
+        Action::MoveXYE moveXye(context.actionQueue.getEndPosition());
+        moveXye.pushPoint(context, hasX ? &xMms : nullptr,
+                          hasY ? &yMms : nullptr, eMms);
         if (moveXye.getNumPoints() > 0) {
-          actionQueue_.push(moveXye);
+          context.actionQueue.push(context, moveXye);
         }
       }
     } else {
-      actionQueue_.push(Action::MoveXY(actionQueue_.getEndPosition(),
-                                       hasX ? &xMms : nullptr,
-                                       hasY ? &yMms : nullptr));
+      context.actionQueue.push(
+          context,
+          Action::MoveXY(context.actionQueue.getEndPosition(),
+                         hasX ? &xMms : nullptr, hasY ? &yMms : nullptr));
     }
   } else if (hasE) {
-    actionQueue_.push(Action::MoveE(actionQueue_.getEndPosition(), e));
+    context.actionQueue.push(
+        context, Action::MoveE(context.actionQueue.getEndPosition(), e));
   }
   return true;
 }

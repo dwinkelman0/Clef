@@ -67,6 +67,22 @@ void GenericTimer<DType>::setFrequency(
   }
 }
 
+template <typename DType>
+void GenericTimer<DType>::setRisingEdgeCallback(
+    const TransitionCallback callback, void *data) {
+  Clef::Impl::Atmega2560::DisableInterrupts noInterrupts();
+  risingEdgeCallback_ = callback;
+  risingEdgeCallbackData_ = data;
+}
+
+template <typename DType>
+void GenericTimer<DType>::setFallingEdgeCallback(
+    const TransitionCallback callback, void *data) {
+  Clef::Impl::Atmega2560::DisableInterrupts noInterrupts();
+  fallingEdgeCallback_ = callback;
+  fallingEdgeCallbackData_ = data;
+}
+
 /**
  * Create ISRs for each timer.
  */

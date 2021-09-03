@@ -40,18 +40,15 @@ extern const char
  * arguments are parsed as needed and actions are enqueued for the firmware to
  * process.
  */
-class GcodeParser : public Clef::Util::Initialized {
+class GcodeParser {
  public:
-  GcodeParser(Clef::If::RWSerial &serial, ActionQueue &actionQueue,
-              XYEPositionQueue &xyePositionQueue);
-
-  bool init() override;
+  GcodeParser();
 
   /**
    * Consume as many characters as possible from serial input. This should be
    * called from the main event loop.
    */
-  void ingest();
+  void ingest(Context &context);
 
  private:
   /**
@@ -74,7 +71,8 @@ class GcodeParser : public Clef::Util::Initialized {
   /**
    * Interpret the arguments and perform and action.
    */
-  bool interpret(const uint16_t errorBufferSize, char *const errorBuffer);
+  bool interpret(Context &context, const uint16_t errorBufferSize,
+                 char *const errorBuffer);
 
   /**
    * Check whether a code letter exists.
@@ -96,7 +94,8 @@ class GcodeParser : public Clef::Util::Initialized {
                   const uint16_t errorBufferSize,
                   char *const errorBuffer) const;
 
-  bool handleG1(const uint16_t errorBufferSize, char *const errorBuffer);
+  bool handleG1(Context &context, const uint16_t errorBufferSize,
+                char *const errorBuffer);
 
  private:
   static const uint16_t size_ = 80; /*!< Static size instead of templating. */
@@ -104,13 +103,6 @@ class GcodeParser : public Clef::Util::Initialized {
   char *head_; /*!< Points at the next available buffer_ char to fill. */
   const char *buckets_[26]; /*!< Start locations of the contents of every
                                detected code letter. */
-  Clef::If::RWSerial
-      &serial_;      /*!< Input stream for receiving G-codes, output stream for
-                        sending status messages to printer client. */
-  bool commentMode_; /*!< Whether a comment was detected in the line. */
-  ActionQueue &actionQueue_; /*!< Actions for the firmware to execute; this
-                          parser is the producer for this queue. */
-  XYEPositionQueue &xyePositionQueue_; /*!< XYE position objects for the action
-                                          queue to utilize. */
+  bool commentMode_;        /*!< Whether a comment was detected in the line. */
 };
 }  // namespace Clef::Fw
