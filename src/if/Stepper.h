@@ -15,6 +15,9 @@ class Stepper : public Clef::Util::Initialized, public Clef::Util::Acquired {
       Clef::Util::Position<int32_t, Clef::Util::PositionUnit::USTEP,
                            USTEPS_PER_MM>;
 
+  /**
+   * Resolution measured as microsteps per step (i.e. _32 is best).
+   */
   enum class Resolution : uint8_t {
     _1 = 0,
     _2 = 1,
