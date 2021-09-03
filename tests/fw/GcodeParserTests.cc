@@ -1,34 +1,11 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
-#include <fw/GcodeParser.h>
-#include <gtest/gtest.h>
-#include <impl/emulator/Clock.h>
-#include <impl/emulator/PwmTimer.h>
-#include <impl/emulator/Serial.h>
-#include <impl/emulator/Stepper.h>
+#include "IntegrationFixture.h"
 
 namespace Clef::Fw {
-class GcodeParserTest : public testing::Test {
+class GcodeParserTest : public IntegrationFixture {
  public:
-  GcodeParserTest()
-      : globalMutex_(std::make_shared<std::mutex>()),
-        clock_(),
-        serial_(globalMutex_),
-        actionQueue_(),
-        parser_(),
-        xAxisTimer_(globalMutex_),
-        yAxisTimer_(globalMutex_),
-        zAxisTimer_(globalMutex_),
-        eAxisTimer_(globalMutex_),
-        xAxis_(Clef::Impl::Emulator::xAxisStepper, xAxisTimer_),
-        yAxis_(Clef::Impl::Emulator::yAxisStepper, yAxisTimer_),
-        zAxis_(Clef::Impl::Emulator::zAxisStepper, zAxisTimer_),
-        eAxis_(Clef::Impl::Emulator::eAxisStepper, eAxisTimer_),
-        axes_(xAxis_, yAxis_, zAxis_, eAxis_),
-        context_({axes_, parser_, clock_, serial_, actionQueue_}) {
-    clock_.init();
-    serial_.init();
-  }
+  GcodeParserTest() : IntegrationFixture() {}
 
   /**
    * Send a minimal valid G-Code command.
@@ -57,23 +34,6 @@ class GcodeParserTest : public testing::Test {
     actionQueue_.pop(context_);
     ASSERT_TRUE(actionQueue_.checkConservation());
   }
-
- protected:
-  std::shared_ptr<std::mutex> globalMutex_;
-  Clef::Impl::Emulator::Clock clock_;
-  Clef::Impl::Emulator::Serial serial_;
-  ActionQueue actionQueue_;
-  GcodeParser parser_;
-  Clef::Impl::Emulator::GenericTimer xAxisTimer_;
-  Clef::Impl::Emulator::GenericTimer yAxisTimer_;
-  Clef::Impl::Emulator::GenericTimer zAxisTimer_;
-  Clef::Impl::Emulator::GenericTimer eAxisTimer_;
-  Axes::XAxis xAxis_;
-  Axes::YAxis yAxis_;
-  Axes::ZAxis zAxis_;
-  Axes::EAxis eAxis_;
-  Axes axes_;
-  Context context_;
 };
 
 TEST_F(GcodeParserTest, Basic) { doBasic(); }
