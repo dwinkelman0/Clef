@@ -25,16 +25,38 @@ enum class Type { MOVE_XY, MOVE_XYE, MOVE_E, MOVE_Z, SET_FEEDRATE };
  * so that derivatives of this class can be in a union.
  */
 class Action {
+  friend class Clef::Fw::ActionQueue;
+
  public:
   Action(const Type type, const Axes::XYZEPosition &startPosition);
   Type getType() const { return type_; }
   Axes::XYZEPosition getEndPosition() const;
 
-  virtual void onPush(Context &context) = 0;
-  virtual void onPop(Context &context) = 0;
+  /**
+   * Executed when the action reaches the front of the queue and becomes active.
+   */
   virtual void onStart(Context &context) = 0;
+
+  /**
+   * Executed from the main event loop while the action is active.
+   */
   virtual void onLoop(Context &context) = 0;
+
+  /**
+   * Check whether this action is completed. Called from the main event loop.
+   */
   virtual bool isFinished(Context &context) = 0;
+
+ private:
+  /**
+   * Executed when the action is pushed to the queue.
+   */
+  virtual void onPush(Context &context) = 0;
+
+  /**
+   * Executed when the action is removed from the queue.
+   */
+  virtual void onPop(Context &context) = 0;
 
  protected:
   Type type_;
@@ -48,21 +70,13 @@ class MoveXY : public Action {
          const Axes::XAxis::GcodePosition *const endPositionX,
          const Axes::YAxis::GcodePosition *const endPositionY);
 
-  void onPush(Context &context) override {
-    // context.axes.getX().acquire();
-    // context.axes.getY().acquire();
-  }
-  void onPop(Context &context) override {
-    // context.axes.getX().release();
-    // context.axes.getY().release();
-  }
-  void onStart(Context &context) override {}
+  void onStart(Context &context) override;
   void onLoop(Context &context) override {}
-  bool isFinished(Context &context) override {
-    // return context.axes.getX().isAtTargetPosition() &&
-    // context.axes.getY().isAtTargetPosition();
-    return true;
-  }
+  bool isFinished(Context &context) override;
+
+ private:
+  void onPush(Context &context) override;
+  void onPop(Context &context) override;
 };
 
 class MoveXYE : public Action {

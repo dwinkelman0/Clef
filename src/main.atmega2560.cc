@@ -51,6 +51,19 @@ int main() {
   int currentQueueSize = actionQueue.size();
   while (1) {
     gcodeParser.ingest(context);
+    if (it) {
+      (*it)->onLoop(context);
+      if ((*it)->isFinished(context)) {
+        context.actionQueue.pop(context);
+        if ((it = actionQueue.first())) {
+          (*it)->onStart(context);
+        }
+      }
+    } else {
+      if ((it = actionQueue.first())) {
+        (*it)->onStart(context);
+      }
+    }
     int newQueueSize = actionQueue.size();
     if (newQueueSize != currentQueueSize) {
       char buffer[64];

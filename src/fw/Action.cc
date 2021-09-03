@@ -25,20 +25,33 @@ MoveXY::MoveXY(const Axes::XYZEPosition &startPosition,
   }
 }
 
-// void MoveXY::onStart(Context &context) {
-//   const Axes::XYZEPosition &endPosition = getEndPosition();
-//   const Axes::XYZEPosition difference =
-//       endPosition - context.actionQueue.getStartPosition();
-//   const float magnitude = difference.magnitude();
-//   context.axes.getX().setFeedrate(context.axes.getFeedrate() * *difference.x
-//   *
-//                                   magnitude);
-//   context.axes.getY().setFeedrate(context.axes.getFeedrate() * *difference.y
-//   *
-//                                   magnitude);
-//   context.axes.getX().setTargetPosition(endPosition.x);
-//   context.axes.getY().setTargetPosition(endPosition.y);
-// }
+void MoveXY::onPush(Context &context) {
+  context.axes.getX().acquire();
+  context.axes.getY().acquire();
+}
+
+void MoveXY::onPop(Context &context) {
+  context.axes.getX().release();
+  context.axes.getY().release();
+}
+
+void MoveXY::onStart(Context &context) {
+  const Axes::XYZEPosition &endPosition = getEndPosition();
+  const Axes::XYZEPosition difference =
+      endPosition - context.actionQueue.getStartPosition();
+  const float magnitude = difference.magnitude();
+  context.axes.getX().setFeedrate(context.axes.getFeedrate() *
+                                  fabs(*difference.x / magnitude));
+  context.axes.getY().setFeedrate(context.axes.getFeedrate() *
+                                  fabs(*difference.y / magnitude));
+  context.axes.getX().setTargetPosition(endPosition.x);
+  context.axes.getY().setTargetPosition(endPosition.y);
+}
+
+bool MoveXY::isFinished(Context &context) {
+  return context.axes.getX().isAtTargetPosition() &&
+         context.axes.getY().isAtTargetPosition();
+}
 
 MoveXYE::MoveXYE(const Axes::XYZEPosition &startPosition)
     : Action(Type::MOVE_XYE, startPosition), numPoints_(0) {}

@@ -31,7 +31,6 @@ class Axis : public Clef::Util::Initialized {
   bool init() override {
     stepper_.init();
     pwmTimer_.init();
-    pwmTimer_.enable();
     return true;
   }
 
@@ -45,6 +44,9 @@ class Axis : public Clef::Util::Initialized {
     pwmTimer_.setRisingEdgeCallback(onRisingEdge, this);
     pwmTimer_.setFallingEdgeCallback(onFallingEdge, this);
     stepper_.setTargetPosition(position);
+    if (!isAtTargetPosition()) {
+      pwmTimer_.enable();
+    }
   }
 
   StepperPosition getPosition() const { return stepper_.getPosition(); }
