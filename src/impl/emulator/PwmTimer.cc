@@ -43,6 +43,10 @@ void GenericTimer::setFrequency(const Clef::Util::Frequency<float> frequency) {
   frequency_ = frequency;
 }
 
+Clef::Util::Frequency<float> GenericTimer::getMinFrequency() const {
+  return 0.001;
+}
+
 void GenericTimer::setRisingEdgeCallback(const TransitionCallback callback,
                                          void *data) {
   std::unique_lock<std::mutex> lock(*globalMutex_);

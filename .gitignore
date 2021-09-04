@@ -7,4 +7,4 @@
 !**/*.cmake
 !.gitignore
 
-build
+build-*

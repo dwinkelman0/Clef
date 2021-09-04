@@ -33,19 +33,20 @@ void GenericTimer<DType>::setFrequency(
   const Clef::Util::Frequency<float> clockFrequency(F_CPU);
   uint16_t divisor = 1;
   Prescaling prescaling;
-  if (frequency > (clockFrequency / 65536.0f)) {
+  float baseFrequency = static_cast<float>(this->getMaxValue()) + 1;
+  if (frequency > (clockFrequency / baseFrequency)) {
     prescaling = Prescaling::_1;
     divisor = 1;
-  } else if (frequency > (clockFrequency / 65536.0f / 8)) {
+  } else if (frequency > (clockFrequency / baseFrequency / 8)) {
     prescaling = Prescaling::_8;
     divisor = 8;
-  } else if (frequency > (clockFrequency / 65536.0f / 64)) {
+  } else if (frequency > (clockFrequency / baseFrequency / 64)) {
     prescaling = Prescaling::_64;
     divisor = 64;
-  } else if (frequency > (clockFrequency / 65536.0f / 256)) {
+  } else if (frequency > (clockFrequency / baseFrequency / 256)) {
     prescaling = Prescaling::_256;
     divisor = 256;
-  } else if (frequency > (clockFrequency / 65536.0f / 1024)) {
+  } else if (frequency > (clockFrequency / baseFrequency / 1024)) {
     prescaling = Prescaling::_1024;
     divisor = 1024;
   } else {
@@ -65,6 +66,11 @@ void GenericTimer<DType>::setFrequency(
       this->setCount(0);
     }
   }
+}
+
+template <typename DType>
+Clef::Util::Frequency<float> GenericTimer<DType>::getMinFrequency() const {
+  return static_cast<const HardwareTimer<DType> *>(this)->_getMinFrequency();
 }
 
 template <typename DType>
@@ -98,11 +104,15 @@ void GenericTimer<DType>::setFallingEdgeCallback(
     }                                                           \
   }
 
+Timer1 timer1;
+Timer2 timer2;
 ClockTimer clockTimer;
 XAxisTimer xAxisTimer;
 YAxisTimer yAxisTimer;
 ZEAxisTimer zeAxisTimer;
 
+TIMER_ISRS(timer1, 0);
+TIMER_ISRS(timer2, 2);
 TIMER_ISRS(clockTimer, 1);
 TIMER_ISRS(xAxisTimer, 3);
 TIMER_ISRS(yAxisTimer, 4);

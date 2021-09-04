@@ -27,12 +27,15 @@ Clef::Fw::Axes axes(xAxis, yAxis, zAxis, eAxis);
 Clef::Fw::Context context{axes, gcodeParser, clock, serial, actionQueue};
 
 void status(void *arg) {
-  Clef::Impl::Atmega2560::EnableInterrupts interrupts();
-  char buffer[64];
-  sprintf(buffer, "Position = (%ld, %ld, %ld, %ld)", *axes.getX().getPosition(),
-          *axes.getY().getPosition(), *axes.getZ().getPosition(),
-          *axes.getE().getPosition());
-  serial.writeLine(buffer);
+  static int counter = 0;
+  if (counter++ % 64 == 0) {
+    Clef::Impl::Atmega2560::EnableInterrupts interrupts();
+    char buffer[64];
+    sprintf(buffer, "Position = (%ld, %ld, %ld, %ld)",
+            *axes.getX().getPosition(), *axes.getY().getPosition(),
+            *axes.getZ().getPosition(), *axes.getE().getPosition());
+    serial.writeLine(buffer);
+  }
 }
 
 int main() {
@@ -42,10 +45,10 @@ int main() {
   serial.init();
   axes.init();
 
-  Clef::Impl::Atmega2560::zeAxisTimer.init();
-  Clef::Impl::Atmega2560::zeAxisTimer.setFrequency(4.0f);
-  Clef::Impl::Atmega2560::zeAxisTimer.setRisingEdgeCallback(status, nullptr);
-  Clef::Impl::Atmega2560::zeAxisTimer.enable();
+  Clef::Impl::Atmega2560::timer1.init();
+  Clef::Impl::Atmega2560::timer1.setFrequency(256.0f);
+  Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(status, nullptr);
+  Clef::Impl::Atmega2560::timer1.enable();
 
   Clef::Fw::ActionQueue::Iterator it = actionQueue.first();
   int currentQueueSize = actionQueue.size();
