@@ -2,11 +2,15 @@
 
 #pragma once
 
-namespace Clef::Impl::Atmega2560 {
+namespace Clef::If {
+bool areInterruptsEnabled();
+void enableInterrupts();
+void disableInterrupts();
+
 /**
  * Create an instance of this object to disable interrupts (regardless of
- * current SREG state) for the lifetime of this object; it restores SREG to its
- * old state upon destruction.
+ * current interrupts state) for the lifetime of this object; it restores
+ * interrupts to its old state upon destruction.
  */
 class DisableInterrupts {
  public:
@@ -20,8 +24,8 @@ class DisableInterrupts {
 
 /**
  * Create an instance of this object to enable interrupts (regardless of
- * current SREG state) for the lifetime of this object; it restores SREG to its
- * old state upon destruction.
+ * current interrupts state) for the lifetime of this object; it restores
+ * interrupts to its old state upon destruction.
  */
 class EnableInterrupts {
  public:
@@ -32,4 +36,4 @@ class EnableInterrupts {
   bool redisable_; /*!< Keep track of whether interrupts need to be re-disabled.
                     */
 };
-}  // namespace Clef::Impl::Atmega2560
+}  // namespace Clef::If

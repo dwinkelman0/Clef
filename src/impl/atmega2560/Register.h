@@ -6,7 +6,10 @@
 #include <impl/atmega2560/AvrUtils.h>
 
 namespace Clef::Impl::Atmega2560 {
-#define WREGISTER_BOOL(P, N, INVERT)                                   \
+/**
+ * Writeable boolean register.
+ */
+#define W_REGISTER_BOOL(P, N, INVERT)                                  \
   {                                                                    \
    public:                                                             \
     static void init() { REG2(DDR, P) |= 1 << shamt_; }                \
@@ -22,5 +25,63 @@ namespace Clef::Impl::Atmega2560 {
     static const uint8_t shamt_ = REG3(PORT, P, N);                    \
   };
 
-class WPin8 WREGISTER_BOOL(H, 5, false);
+/**
+ * Readable boolean register with its own on-change interrupt.
+ */
+#define RINT_REGISTER_BOOL_EDGE_LOW 0
+#define RINT_REGISTER_BOOL_EDGE_BOTH 1
+#define RINT_REGISTER_BOOL_EDGE_FALLING 2
+#define RINT_REGISTER_BOOL_EDGE_RISING 3
+#define RINT_REGISTER_BOOL(P, N, INT_GROUP, INT_NUM, EDGES)                    \
+  {                                                                            \
+   public:                                                                     \
+    static void init() {                                                       \
+      REG2(DDR, P) &= ~(1 << REG3(PIN, P, N)); /*!< Set this pin as input. */  \
+      REG2(EICR, INT_GROUP) &= ~(                                              \
+          3 << REG3(ISC, INT_NUM, 0)); /*!< Enable interrupts for this pin. */ \
+      REG2(EICR, INT_GROUP) |=                                                 \
+          EDGES << REG3(ISC, INT_NUM,                                          \
+                        0); /*!< Enable rising/falling edge trigger. */        \
+      EIMSK |= (1 << REG2(INT, INT_NUM));                                      \
+    }                                                                          \
+    static bool read() { return REG2(PIN, P) & (1 << REG3(PIN, P, N)); }       \
+    static void setCallback(void (*callback)(void *), void *data) {            \
+      callback_ = callback;                                                    \
+      callbackData_ = data;                                                    \
+    }                                                                          \
+                                                                               \
+    static void (*callback_)(void *);                                          \
+    static void *callbackData_;                                                \
+  }
+
+/**
+ * Readable boolean register as part of a group of registers which share the
+ * same on-change interrupts.
+ */
+#define RINTGROUP_REGISTER_BOOL(P, N, INT_GROUP, INT_INDEX)                    \
+  {                                                                            \
+   public:                                                                     \
+    static void init() {                                                       \
+      REG2(DDR, P) &= ~(1 << REG3(PIN, P, N)); /*!< Set this pin as input. */  \
+      PCICR |=                                                                 \
+          1 << REG2(                                                           \
+              PCIE,                                                            \
+              INT_GROUP); /*!< Enable interrupts for this group of pins. */    \
+      REG2(PCMSK, INT_GROUP) |=                                                \
+          1 << INT_INDEX; /*!< Enable interrupts for this pin. */              \
+    }                                                                          \
+    static bool read() { return REG2(PIN, P) & (1 << REG3(PIN, P, N)); }       \
+    static void setGroupChangeCallback(void (*callback)(void *), void *data) { \
+      groupChangeCallback_ = callback;                                         \
+      callbackData_ = data;                                                    \
+    }                                                                          \
+                                                                               \
+   private:                                                                    \
+    static void (*groupChangeCallback_)(void *);                               \
+    static void *callbackData_;                                                \
+  }
+
+class WPin8 W_REGISTER_BOOL(H, 5, false);
+class RIntPin2 RINT_REGISTER_BOOL(E, 4, B, 4, RINT_REGISTER_BOOL_EDGE_BOTH);
+class RIntGroupPinA15 RINTGROUP_REGISTER_BOOL(K, 7, 2, 7);
 }  // namespace Clef::Impl::Atmega2560

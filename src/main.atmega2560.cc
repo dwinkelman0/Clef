@@ -2,8 +2,8 @@
 
 #include <fw/Action.h>
 #include <fw/GcodeParser.h>
+#include <if/Interrupts.h>
 #include <impl/atmega2560/Clock.h>
-#include <impl/atmega2560/Interrupts.h>
 #include <impl/atmega2560/PwmTimer.h>
 #include <impl/atmega2560/Register.h>
 #include <impl/atmega2560/Serial.h>
@@ -28,13 +28,22 @@ Clef::Fw::Context context{axes, gcodeParser, clock, serial, actionQueue};
 
 void status(void *arg) {
   static int counter = 0;
-  if (counter++ % 64 == 0) {
-    Clef::Impl::Atmega2560::EnableInterrupts interrupts();
+  if (counter++ % 64 == 0 && Clef::Impl::Atmega2560::RIntPin2::read()) {
+    Clef::If::EnableInterrupts interrupts;
     char buffer[64];
     sprintf(buffer, "Position = (%ld, %ld, %ld, %ld)",
             *axes.getX().getPosition(), *axes.getY().getPosition(),
             *axes.getZ().getPosition(), *axes.getE().getPosition());
     serial.writeLine(buffer);
+  }
+}
+
+void pinChangeInterrupt(void *arg) {
+  Clef::If::EnableInterrupts interrupts;
+  if (Clef::Impl::Atmega2560::RIntPin2::read()) {
+    serial.writeLine("Hello!");
+  } else {
+    serial.writeLine("World!");
   }
 }
 
@@ -44,6 +53,9 @@ int main() {
   }
   serial.init();
   axes.init();
+
+  Clef::Impl::Atmega2560::RIntPin2::init();
+  Clef::Impl::Atmega2560::RIntPin2::setCallback(pinChangeInterrupt, nullptr);
 
   Clef::Impl::Atmega2560::timer1.init();
   Clef::Impl::Atmega2560::timer1.setFrequency(256.0f);

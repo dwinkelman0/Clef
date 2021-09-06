@@ -3,13 +3,13 @@
 #include "PwmTimer.h"
 
 #include <avr/interrupt.h>
-#include <impl/atmega2560/Interrupts.h>
+#include <if/Interrupts.h>
 
 namespace Clef::Impl::Atmega2560 {
 template <typename DType>
 bool GenericTimer<DType>::init() {
   if (Clef::Util::Initialized::init()) {
-    DisableInterrupts noInterrupts();
+    Clef::If::DisableInterrupts noInterrupts();
     this->initRegs();
     return true;
   }
@@ -58,7 +58,7 @@ void GenericTimer<DType>::setFrequency(
           ? this->getMaxValue()
           : static_cast<DType>(clockFrequency / divisor / frequency - 1);
   {
-    DisableInterrupts noInterrupts;
+    Clef::If::DisableInterrupts noInterrupts;
     this->setCompareA(compare);
     this->setCompareB(compare / 2);
     this->setPrescaler(prescaling);
@@ -76,7 +76,7 @@ Clef::Util::Frequency<float> GenericTimer<DType>::getMinFrequency() const {
 template <typename DType>
 void GenericTimer<DType>::setRisingEdgeCallback(
     const TransitionCallback callback, void *data) {
-  Clef::Impl::Atmega2560::DisableInterrupts noInterrupts();
+  Clef::If::DisableInterrupts noInterrupts();
   risingEdgeCallback_ = callback;
   risingEdgeCallbackData_ = data;
 }
@@ -84,7 +84,7 @@ void GenericTimer<DType>::setRisingEdgeCallback(
 template <typename DType>
 void GenericTimer<DType>::setFallingEdgeCallback(
     const TransitionCallback callback, void *data) {
-  Clef::Impl::Atmega2560::DisableInterrupts noInterrupts();
+  Clef::If::DisableInterrupts noInterrupts();
   fallingEdgeCallback_ = callback;
   fallingEdgeCallbackData_ = data;
 }

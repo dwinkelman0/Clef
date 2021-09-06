@@ -66,7 +66,7 @@ template class GenericTimer<uint16_t>;
  * Create classes which are essentially wrappers around timer registers. This is
  * the version for an 8-bit timer (0, 2).
  */
-#define TIMER8(N, MAX_PRESCALING)                                            \
+#define TIMER8(N, EXTRA_PRESCALING)                                          \
  public                                                                      \
   GenericTimer<uint8_t> {                                                    \
    private:                                                                  \
@@ -98,18 +98,26 @@ template class GenericTimer<uint16_t>;
     }                                                                        \
     void setPrescaler(const HardwareTimer<uint8_t>::Prescaling value)        \
         override {                                                           \
+      int actual = static_cast<int>(value);                                  \
+      if (EXTRA_PRESCALING) {                                                \
+        if (actual == 3) {                                                   \
+          actual = 4;                                                        \
+        } else if (actual == 4) {                                            \
+          actual = 6;                                                        \
+        } else if (actual == 5) {                                            \
+          actual = 7;                                                        \
+        }                                                                    \
+      }                                                                      \
       REG3(TCCR, N, B) &= ~((1 << REG3(CS, N, 0)) | (1 << REG3(CS, N, 1)) |  \
                             (1 << REG3(CS, N, 2)));                          \
-      REG3(TCCR, N, B) |= (static_cast<int>(value) & 1) << REG3(CS, N, 0);   \
-      REG3(TCCR, N, B) |= ((static_cast<int>(value) >> 1) & 1)               \
-                          << REG3(CS, N, 1);                                 \
-      REG3(TCCR, N, B) |= ((static_cast<int>(value) >> 2) & 1)               \
-                          << REG3(CS, N, 2);                                 \
+      REG3(TCCR, N, B) |= (actual & 1) << REG3(CS, N, 0);                    \
+      REG3(TCCR, N, B) |= ((actual >> 1) & 1) << REG3(CS, N, 1);             \
+      REG3(TCCR, N, B) |= ((actual >> 2) & 1) << REG3(CS, N, 2);             \
     }                                                                        \
     uint8_t getMaxValue() const override { return 0xff; }                    \
     Clef::Util::Frequency<float> _getMinFrequency() const override {         \
       return static_cast<float>(F_CPU) / (static_cast<uint32_t>(1) << 8) /   \
-             static_cast<uint32_t>(MAX_PRESCALING);                          \
+             (static_cast<uint32_t>(1) << 10);                               \
     }                                                                        \
   }
 
@@ -152,13 +160,12 @@ template class GenericTimer<uint16_t>;
     }                                                                        \
     void setPrescaler(const HardwareTimer<uint16_t>::Prescaling value)       \
         override {                                                           \
+      int actual = static_cast<int>(value);                                  \
       REG3(TCCR, N, B) &= ~((1 << REG3(CS, N, 0)) | (1 << REG3(CS, N, 1)) |  \
                             (1 << REG3(CS, N, 2)));                          \
-      REG3(TCCR, N, B) |= (static_cast<int>(value) & 1) << REG3(CS, N, 0);   \
-      REG3(TCCR, N, B) |= ((static_cast<int>(value) >> 1) & 1)               \
-                          << REG3(CS, N, 1);                                 \
-      REG3(TCCR, N, B) |= ((static_cast<int>(value) >> 2) & 1)               \
-                          << REG3(CS, N, 2);                                 \
+      REG3(TCCR, N, B) |= (actual & 1) << REG3(CS, N, 0);                    \
+      REG3(TCCR, N, B) |= ((actual >> 1) & 1) << REG3(CS, N, 1);             \
+      REG3(TCCR, N, B) |= ((actual >> 2) & 1) << REG3(CS, N, 2);             \
     }                                                                        \
     uint16_t getMaxValue() const override { return 0xffff; }                 \
     Clef::Util::Frequency<float> _getMinFrequency() const override {         \
@@ -167,8 +174,8 @@ template class GenericTimer<uint16_t>;
     }                                                                        \
   }
 
-class Timer1 : TIMER8(0, 1024);
-class Timer2 : TIMER8(2, 64);
+class Timer1 : TIMER8(0, false);
+class Timer2 : TIMER8(2, true);
 class ClockTimer : TIMER16(1);
 class XAxisTimer : TIMER16(3);
 class YAxisTimer : TIMER16(4);

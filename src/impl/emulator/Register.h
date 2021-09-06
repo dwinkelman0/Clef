@@ -3,7 +3,7 @@
 #pragma once
 
 namespace Clef::Impl::Emulator {
-#define WREGISTER_BOOL                                      \
+#define W_REGISTER_BOOL                                     \
   {                                                         \
    public:                                                  \
     static void init() { state_ = false; }                  \
