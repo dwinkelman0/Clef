@@ -75,6 +75,11 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
             ${eep_file}
             ${hex_file}
     )
+    add_custom_target (
+        ${Target_fw_atmega2560}-size
+        ALL ${AVR_SIZE_TOOL} -C --mcu=atmega2560 ${elf_file}
+        DEPENDS ${elf_file}
+    )
     if (DEFINED CLEF_PORT AND DEFINED CLEF_BAUD)
         add_custom_target(
             ${Target_fw_atmega2560}-upload-hex
