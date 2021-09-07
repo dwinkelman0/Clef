@@ -22,7 +22,7 @@ class GenericUnit {
     return GenericUnit(**this + *other);
   }
   inline constexpr GenericUnit operator-(const GenericUnit &other) const {
-    return GenericUnit(**this + *other);
+    return GenericUnit(**this - *other);
   }
   inline constexpr GenericUnit operator*(const DType scalar) const {
     return GenericUnit(**this * scalar);

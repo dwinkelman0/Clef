@@ -41,7 +41,7 @@ class Sensor {
    * Provide a data point from an external source.
    */
   void inject(DType data) {
-    DataPoint dataPoint = {clock_.getMicros(), data};
+    DataPoint dataPoint = {*clock_.getMicros(), data};
     Clef::If::DisableInterrupts noInterrupts;
     switch (state_) {
       case State::NO_DATA:
@@ -100,7 +100,7 @@ class Sensor {
   /**
    * This function is called whenever current_ updates.
    */
-  virtual void onCurrentUpdate(const DataPoint dataPoint) = 0;
+  virtual void onCurrentUpdate(const DataPoint dataPoint) {}
 
   /**
    * This function is only safe to call if state_ is CHECKED_OUT or
@@ -144,23 +144,27 @@ class DisplacementSensor
         lastDataPoint_({0, 0}),
         lowPassFilterCoefficient_(lowPassFilterCoefficient) {}
 
-  AxisPosition getPosition() const { return read(); }
+  AxisPosition readPosition() const { return read(); }
 
   AxisFeedrate readFeedrate() const { return currentFeedrate_; }
 
- private:
+ protected:
   void onCurrentUpdate(const DataPoint dataPoint) override {
     if (lastDataPoint_.time > 0) {
       // Not the first sample
-      AxisFeedrate newFeedrate(AxisPosition(*SensorUstepsPosition(
-                                   dataPoint.data - lastDataPoint_.data)),
-                               dataPoint.time - lastDataPoint_.time);
+      AxisFeedrate newFeedrate(
+          AxisPosition(*SensorUstepsPosition(
+              SensorAnalogPosition(dataPoint.data - lastDataPoint_.data))),
+          Clef::Util::Time<float, Clef::Util::TimeUnit::MIN>(
+              Clef::Util::Time<float, Clef::Util::TimeUnit::USEC>(
+                  dataPoint.time - lastDataPoint_.time)));
       currentFeedrate_ = currentFeedrate_ * (1 - lowPassFilterCoefficient_) +
                          newFeedrate * lowPassFilterCoefficient_;
     }
     lastDataPoint_ = dataPoint;
   }
 
+ private:
   DataPoint read() const;
 
  private:
