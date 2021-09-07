@@ -25,16 +25,6 @@ MoveXY::MoveXY(const Axes::XYZEPosition &startPosition,
   }
 }
 
-void MoveXY::onPush(Context &context) {
-  context.axes.getX().acquire();
-  context.axes.getY().acquire();
-}
-
-void MoveXY::onPop(Context &context) {
-  context.axes.getX().release();
-  context.axes.getY().release();
-}
-
 void MoveXY::onStart(Context &context) {
   const Axes::XYZEPosition &endPosition = getEndPosition();
   const Axes::XYZEPosition difference =
@@ -48,9 +38,19 @@ void MoveXY::onStart(Context &context) {
   context.axes.getY().setTargetPosition(endPosition.y);
 }
 
-bool MoveXY::isFinished(Context &context) {
+bool MoveXY::isFinished(const Context &context) const {
   return context.axes.getX().isAtTargetPosition() &&
          context.axes.getY().isAtTargetPosition();
+}
+
+void MoveXY::onPush(Context &context) {
+  context.axes.getX().acquire();
+  context.axes.getY().acquire();
+}
+
+void MoveXY::onPop(Context &context) {
+  context.axes.getX().release();
+  context.axes.getY().release();
 }
 
 MoveXYE::MoveXYE(const Axes::XYZEPosition &startPosition)
@@ -98,6 +98,20 @@ MoveE::MoveE(const Axes::XYZEPosition &startPosition,
           endPositionE)));
 }
 
+void MoveE::onStart(Context &context) {
+  // Use constant feedrate
+  context.axes.getE().setFeedrate(Axes::EAxis::GcodeFeedrate(120.0f));
+  context.axes.getE().setTargetPosition(getEndPosition().e);
+}
+
+bool MoveE::isFinished(const Context &context) const {
+  return context.axes.getE().isAtTargetPosition();
+}
+
+void MoveE::onPush(Context &context) { context.axes.getE().acquire(); }
+
+void MoveE::onPop(Context &context) { context.axes.getE().release(); }
+
 MoveZ::MoveZ(const Axes::XYZEPosition &startPosition,
              const Axes::ZAxis::GcodePosition endPositionZ)
     : Action(Type::MOVE_Z, startPosition) {
@@ -106,10 +120,30 @@ MoveZ::MoveZ(const Axes::XYZEPosition &startPosition,
           endPositionZ)));
 }
 
+void MoveZ::onStart(Context &context) {
+  // Use constant feedrate
+  context.axes.getZ().setFeedrate(Axes::ZAxis::GcodeFeedrate(600.0f));
+  context.axes.getZ().setTargetPosition(getEndPosition().z);
+}
+
+bool MoveZ::isFinished(const Context &context) const {
+  return context.axes.getZ().isAtTargetPosition();
+}
+
+void MoveZ::onPush(Context &context) { context.axes.getZ().acquire(); }
+
+void MoveZ::onPop(Context &context) { context.axes.getZ().release(); }
+
 SetFeedrate::SetFeedrate(const Axes::XYZEPosition &startPosition,
-                         const float rawFeedrateMMs)
+                         const float rawFeedrateMmPerMin)
     : Action(Type::SET_FEEDRATE, startPosition),
-      rawFeedrateMMs_(rawFeedrateMMs) {}
+      rawFeedrateMmPerMin_(rawFeedrateMmPerMin) {}
+
+void SetFeedrate::onStart(Context &context) {
+  context.axes.setFeedrate(rawFeedrateMmPerMin_);
+}
+
+bool SetFeedrate::isFinished(const Context &context) const { return true; }
 }  // namespace Action
 
 ActionQueue::ActionQueue()

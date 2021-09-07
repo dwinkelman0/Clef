@@ -195,10 +195,16 @@ class Axes : public Clef::Util::Initialized {
   const EAxis &getE() const { return e_; }
 
   bool init() override;
+
+  /**
+   * Set feedrate in raw mm/min (a.k.a. GcodeFeedrate).
+   */
   void setFeedrate(const XAxis::GcodeFeedrate feedrate) {
     feedrate_ = feedrate;
   }
+
   XAxis::GcodeFeedrate getFeedrate() const { return feedrate_; }
+
   XYZEPosition getPosition() const {
     Clef::If::DisableInterrupts noInterrupts;
     return {x_.getPosition(), y_.getPosition(), z_.getPosition(),

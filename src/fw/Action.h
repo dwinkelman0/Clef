@@ -44,8 +44,9 @@ class Action {
 
   /**
    * Check whether this action is completed. Called from the main event loop.
+   * Should have no side-effects.
    */
-  virtual bool isFinished(Context &context) = 0;
+  virtual bool isFinished(const Context &context) const = 0;
 
  private:
   /**
@@ -72,7 +73,7 @@ class MoveXY : public Action {
 
   void onStart(Context &context) override;
   void onLoop(Context &context) override {}
-  bool isFinished(Context &context) override;
+  bool isFinished(const Context &context) const override;
 
  private:
   void onPush(Context &context) override;
@@ -102,7 +103,7 @@ class MoveXYE : public Action {
   void onPop(Context &context) override {}
   void onStart(Context &context) override {}
   void onLoop(Context &context) override {}
-  bool isFinished(Context &context) override { return true; }
+  bool isFinished(const Context &context) const override { return true; }
 
  private:
   uint16_t numPoints_;
@@ -114,13 +115,13 @@ class MoveE : public Action {
   MoveE(const Axes::XYZEPosition &startPosition,
         const Axes::EAxis::GcodePosition endPositionE);
 
-  void onPush(Context &context) override {
-    // context.axes.getE().acquire();
-  }
-  void onPop(Context &context) override {}
-  void onStart(Context &context) override {}
+  void onStart(Context &context) override;
   void onLoop(Context &context) override {}
-  bool isFinished(Context &context) override { return true; }
+  bool isFinished(const Context &context) const override;
+
+ private:
+  void onPush(Context &context) override;
+  void onPop(Context &context) override;
 };
 
 class MoveZ : public Action {
@@ -129,29 +130,31 @@ class MoveZ : public Action {
   MoveZ(const Axes::XYZEPosition &startPosition,
         const Axes::ZAxis::GcodePosition endPositionZ);
 
-  void onPush(Context &context) override {
-    // context.axes.getZ().acquire();
-  }
-  void onPop(Context &context) override {}
-  void onStart(Context &context) override {}
+  void onStart(Context &context) override;
   void onLoop(Context &context) override {}
-  bool isFinished(Context &context) override { return true; }
+  bool isFinished(const Context &context) const override;
+
+ private:
+  void onPush(Context &context) override;
+  void onPop(Context &context) override;
 };
 
 class SetFeedrate : public Action {
  public:
   SetFeedrate() : SetFeedrate({0, 0, 0, 0}, 1200) {}
   SetFeedrate(const Axes::XYZEPosition &startPosition,
-              const float rawFeedrateMMs);
+              const float rawFeedrateMmPerMin);
 
-  void onPush(Context &context) override {}
-  void onPop(Context &context) override {}
-  void onStart(Context &context) override {}
+  void onStart(Context &context) override;
   void onLoop(Context &context) override {}
-  bool isFinished(Context &context) override { return true; }
+  bool isFinished(const Context &context) const override;
 
  private:
-  float rawFeedrateMMs_;
+  void onPush(Context &context) override {}
+  void onPop(Context &context) override {}
+
+ private:
+  float rawFeedrateMmPerMin_;
 };
 }  // namespace Action
 

@@ -49,7 +49,7 @@ extern ZAxisStepper zAxisStepper;
 class EAxisStepperConfig {
  public:
   class EnableRegister W_REGISTER_BOOL(L, 0, true);       /*!< Pin 49. */
-  class DirectionRegister W_REGISTER_BOOL(L, 4, false);   /*!< Pin 39. */
+  class DirectionRegister W_REGISTER_BOOL(G, 2, false);   /*!< Pin 39. */
   class PulseRegister W_REGISTER_BOOL(G, 0, false);       /*!< Pin 41. */
   class ResolutionRegister0 W_REGISTER_BOOL(L, 2, false); /*!< Pin 47. */
   class ResolutionRegister1 W_REGISTER_BOOL(L, 4, false); /*!< Pin 45. */
