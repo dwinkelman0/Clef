@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 #include <impl/emulator/Clock.h>
 #include <impl/emulator/PwmTimer.h>
+#include <impl/emulator/SensorInput.h>
 #include <impl/emulator/Serial.h>
 #include <impl/emulator/Stepper.h>
 
@@ -22,6 +23,9 @@ class IntegrationFixture : public testing::Test {
   Clef::Impl::Emulator::GenericTimer yAxisTimer_;
   Clef::Impl::Emulator::GenericTimer zAxisTimer_;
   Clef::Impl::Emulator::GenericTimer eAxisTimer_;
+  Clef::Impl::Emulator::DisplacementSensorInput displacementSensorInput_;
+  DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>
+      displacementSensor_;
   Axes::XAxis xAxis_;
   Axes::YAxis yAxis_;
   Axes::ZAxis zAxis_;

@@ -13,13 +13,20 @@ IntegrationFixture::IntegrationFixture()
       yAxisTimer_(globalMutex_),
       zAxisTimer_(globalMutex_),
       eAxisTimer_(globalMutex_),
+      displacementSensorInput_(),
+      displacementSensor_(clock_, 0.1),
       xAxis_(Clef::Impl::Emulator::xAxisStepper, xAxisTimer_),
       yAxis_(Clef::Impl::Emulator::yAxisStepper, yAxisTimer_),
       zAxis_(Clef::Impl::Emulator::zAxisStepper, zAxisTimer_),
-      eAxis_(Clef::Impl::Emulator::eAxisStepper, eAxisTimer_),
+      eAxis_(Clef::Impl::Emulator::eAxisStepper, eAxisTimer_,
+             displacementSensor_),
       axes_(xAxis_, yAxis_, zAxis_, eAxis_),
       context_({axes_, parser_, clock_, serial_, actionQueue_}) {
   clock_.init();
   serial_.init();
+  displacementSensorInput_.setConversionCallback(
+      DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT,
+                         USTEPS_PER_MM_E>::injectWrapper,
+      &displacementSensor_);
 }
 }  // namespace Clef::Fw

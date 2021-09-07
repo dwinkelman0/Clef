@@ -42,7 +42,7 @@ class Caliper : public Clef::If::SensorInput<typename Config::Position> {
           output = -output;
         }
         caliper->conversionCallback_(
-            typename Config::Position(static_cast<float>(output)),
+            typename Config::Position(static_cast<float>(output) / 100),
             caliper->conversionCallbackData_);
       }
     }

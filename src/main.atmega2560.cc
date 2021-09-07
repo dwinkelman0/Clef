@@ -13,6 +13,8 @@
 
 Clef::Impl::Atmega2560::Clock clock(Clef::Impl::Atmega2560::clockTimer);
 Clef::Impl::Atmega2560::Usart serial;
+Clef::Fw::DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>
+    displacementSensor(clock, 0.1);
 Clef::Fw::ActionQueue actionQueue;
 Clef::Fw::XYEPositionQueue xyePositionQueue;
 Clef::Fw::GcodeParser gcodeParser;
@@ -23,7 +25,8 @@ Clef::Fw::Axes::YAxis yAxis(Clef::Impl::Atmega2560::yAxisStepper,
 Clef::Fw::Axes::ZAxis zAxis(Clef::Impl::Atmega2560::zAxisStepper,
                             Clef::Impl::Atmega2560::zeAxisTimer);
 Clef::Fw::Axes::EAxis eAxis(Clef::Impl::Atmega2560::eAxisStepper,
-                            Clef::Impl::Atmega2560::zeAxisTimer);
+                            Clef::Impl::Atmega2560::zeAxisTimer,
+                            displacementSensor);
 Clef::Fw::Axes axes(xAxis, yAxis, zAxis, eAxis);
 Clef::Fw::Context context{axes, gcodeParser, clock, serial, actionQueue};
 
@@ -39,14 +42,20 @@ void status(void *arg) {
   }
 }
 
-void onCaliperConversion(
-    const Clef::Util::Position<float, Clef::Util::PositionUnit::MM,
-                               USTEPS_PER_MM_DISPLACEMENT>
-        data,
-    void *arg) {
-  char buffer[64];
-  sprintf(buffer, "Received data: %ld", static_cast<uint32_t>(*data));
-  serial.writeLine(buffer);
+void checkDisplacementSensor() {
+  if (displacementSensor.checkOut()) {
+    Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
+                         USTEPS_PER_MM_E>
+        position = displacementSensor.readPosition();
+    Clef::Util::Feedrate<float, Clef::Util::PositionUnit::USTEP,
+                         Clef::Util::TimeUnit::MIN, USTEPS_PER_MM_E>
+        feedrate = displacementSensor.readFeedrate();
+    char buffer[64];
+    sprintf(buffer, "Received data: x = %ld, v = %ld",
+            static_cast<uint32_t>(*position), static_cast<uint32_t>(*feedrate));
+    serial.writeLine(buffer);
+    displacementSensor.release();
+  }
 }
 
 int main() {
@@ -56,19 +65,22 @@ int main() {
   serial.init();
   axes.init();
 
+  Clef::Impl::Atmega2560::extruderCaliper.init();
+  Clef::Impl::Atmega2560::extruderCaliper.setConversionCallback(
+      Clef::Fw::DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT,
+                                   USTEPS_PER_MM_E>::injectWrapper,
+      &displacementSensor);
+
   Clef::Impl::Atmega2560::timer1.init();
   Clef::Impl::Atmega2560::timer1.setFrequency(256.0f);
   Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(status, nullptr);
   Clef::Impl::Atmega2560::timer1.enable();
 
-  Clef::Impl::Atmega2560::extruderCaliper.init();
-  Clef::Impl::Atmega2560::extruderCaliper.setConversionCallback(
-      onCaliperConversion, nullptr);
-
   Clef::Fw::ActionQueue::Iterator it = actionQueue.first();
   int currentQueueSize = actionQueue.size();
   while (1) {
     gcodeParser.ingest(context);
+    checkDisplacementSensor();
     if (it) {
       (*it)->onLoop(context);
       if ((*it)->isFinished(context)) {

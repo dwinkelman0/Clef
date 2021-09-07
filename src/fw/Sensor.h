@@ -117,8 +117,8 @@ class Sensor {
 
 template <uint32_t SENSOR_USTEPS_PER_MM, uint32_t AXIS_USTEPS_PER_MM>
 class DisplacementSensor
-    : protected Sensor<Clef::Util::Position<float, Clef::Util::PositionUnit::MM,
-                                            SENSOR_USTEPS_PER_MM>> {
+    : public Sensor<Clef::Util::Position<float, Clef::Util::PositionUnit::MM,
+                                         SENSOR_USTEPS_PER_MM>> {
  public:
   using SensorIf =
       Sensor<Clef::Util::Position<float, Clef::Util::PositionUnit::MM,
@@ -144,7 +144,14 @@ class DisplacementSensor
         lastDataPoint_({0, 0}),
         lowPassFilterCoefficient_(lowPassFilterCoefficient) {}
 
-  AxisPosition readPosition() const { return read(); }
+  static void injectWrapper(SensorAnalogPosition data, void *arg) {
+    DisplacementSensor *sensor = reinterpret_cast<DisplacementSensor *>(arg);
+    sensor->inject(data);
+  }
+
+  AxisPosition readPosition() const {
+    return convertToAxisPosition(read().data);
+  }
 
   AxisFeedrate readFeedrate() const { return currentFeedrate_; }
 
@@ -153,8 +160,8 @@ class DisplacementSensor
     if (lastDataPoint_.time > 0) {
       // Not the first sample
       AxisFeedrate newFeedrate(
-          AxisPosition(*SensorUstepsPosition(
-              SensorAnalogPosition(dataPoint.data - lastDataPoint_.data))),
+          convertToAxisPosition(
+              SensorAnalogPosition(dataPoint.data - lastDataPoint_.data)),
           Clef::Util::Time<float, Clef::Util::TimeUnit::MIN>(
               Clef::Util::Time<float, Clef::Util::TimeUnit::USEC>(
                   dataPoint.time - lastDataPoint_.time)));
@@ -164,8 +171,16 @@ class DisplacementSensor
     lastDataPoint_ = dataPoint;
   }
 
+  static AxisPosition convertToAxisPosition(
+      const SensorAnalogPosition position) {
+    return AxisPosition(*SensorUstepsPosition(position));
+  }
+
  private:
-  DataPoint read() const;
+  /**
+   * Make the underlying read() function private since it is in the wrong units.
+   */
+  DataPoint read() const { return SensorIf::read(); }
 
  private:
   AxisFeedrate currentFeedrate_;

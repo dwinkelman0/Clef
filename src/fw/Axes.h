@@ -111,16 +111,36 @@ class Axis : public Clef::Util::Initialized {
 };
 
 template <uint32_t SENSOR_USTEPS_PER_MM, uint32_t USTEPS_PER_MM>
-class ExtrusionAxis : public Axis<USTEPS_PER_MM> {};
+class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
+ public:
+  ExtrusionAxis(Clef::If::Stepper<USTEPS_PER_MM> &stepper,
+                Clef::If::PwmTimer &pwmTimer,
+                Clef::Fw::DisplacementSensor<SENSOR_USTEPS_PER_MM,
+                                             USTEPS_PER_MM> &displacementSensor)
+      : Axis<USTEPS_PER_MM>(stepper, pwmTimer),
+        displacementSensor_(displacementSensor) {}
+
+  /**
+   * If there is new sensor data, handle feedrate throttling.
+   */
+  void throttle() {
+    if (displacementSensor_.checkOut()) {
+      // TODO: actual logic
+      displacementSensor_.release();
+    }
+  }
+
+ private:
+  Clef::Fw::DisplacementSensor<SENSOR_USTEPS_PER_MM, USTEPS_PER_MM>
+      &displacementSensor_;
+};
 
 class Axes : public Clef::Util::Initialized {
  public:
   using XAxis = Axis<USTEPS_PER_MM_X>;
   using YAxis = Axis<USTEPS_PER_MM_Y>;
   using ZAxis = Axis<USTEPS_PER_MM_Z>;
-  using EAxis = Axis<USTEPS_PER_MM_E>;
-  // using EAxis = ExtrusionAxis<USTEPS_PER_MM_DISPLACEMENT,
-  // USTEPS_PER_MM_E>;
+  using EAxis = ExtrusionAxis<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>;
 
   struct XYEPosition {
     using XPosition = XAxis::StepperPosition;
