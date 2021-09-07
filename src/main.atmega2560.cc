@@ -6,6 +6,7 @@
 #include <impl/atmega2560/Clock.h>
 #include <impl/atmega2560/PwmTimer.h>
 #include <impl/atmega2560/Register.h>
+#include <impl/atmega2560/SensorInput.h>
 #include <impl/atmega2560/Serial.h>
 #include <impl/atmega2560/Stepper.h>
 #include <stdio.h>
@@ -28,7 +29,7 @@ Clef::Fw::Context context{axes, gcodeParser, clock, serial, actionQueue};
 
 void status(void *arg) {
   static int counter = 0;
-  if (counter++ % 64 == 0 && Clef::Impl::Atmega2560::RIntPin2::read()) {
+  if (counter++ % 64 == 0) {
     Clef::If::EnableInterrupts interrupts;
     char buffer[64];
     sprintf(buffer, "Position = (%ld, %ld, %ld, %ld)",
@@ -38,13 +39,14 @@ void status(void *arg) {
   }
 }
 
-void pinChangeInterrupt(void *arg) {
-  Clef::If::EnableInterrupts interrupts;
-  if (Clef::Impl::Atmega2560::RIntPin2::read()) {
-    serial.writeLine("Hello!");
-  } else {
-    serial.writeLine("World!");
-  }
+void onCaliperConversion(
+    const Clef::Util::Position<float, Clef::Util::PositionUnit::MM,
+                               USTEPS_PER_MM_DISPLACEMENT>
+        data,
+    void *arg) {
+  char buffer[64];
+  sprintf(buffer, "Received data: %ld", static_cast<uint32_t>(*data));
+  serial.writeLine(buffer);
 }
 
 int main() {
@@ -54,13 +56,14 @@ int main() {
   serial.init();
   axes.init();
 
-  Clef::Impl::Atmega2560::RIntPin2::init();
-  Clef::Impl::Atmega2560::RIntPin2::setCallback(pinChangeInterrupt, nullptr);
-
   Clef::Impl::Atmega2560::timer1.init();
   Clef::Impl::Atmega2560::timer1.setFrequency(256.0f);
   Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(status, nullptr);
   Clef::Impl::Atmega2560::timer1.enable();
+
+  Clef::Impl::Atmega2560::extruderCaliper.init();
+  Clef::Impl::Atmega2560::extruderCaliper.setConversionCallback(
+      onCaliperConversion, nullptr);
 
   Clef::Fw::ActionQueue::Iterator it = actionQueue.first();
   int currentQueueSize = actionQueue.size();

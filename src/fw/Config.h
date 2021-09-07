@@ -8,7 +8,8 @@
 #define USTEPS_PER_MM_X 160L
 #define USTEPS_PER_MM_Y 160L
 #define USTEPS_PER_MM_Z 400L
-#define USTEPS_PER_MM_E 1280L
+#define USTEPS_PER_MM_E 564L
+#define USTEPS_PER_MM_DISPLACEMENT 1280L
 
 /**
  * Set a limit on stepper motor pulse frequency.

@@ -3,6 +3,8 @@
 #pragma once
 
 #include <fw/Config.h>
+#include <fw/Sensor.h>
+#include <if/Interrupts.h>
 #include <if/PwmTimer.h>
 #include <if/Stepper.h>
 #include <math.h>
@@ -41,6 +43,7 @@ class Axis : public Clef::Util::Initialized {
   void releaseAll() { stepper_.releaseAll(); }
 
   void setTargetPosition(const StepperPosition position) {
+    Clef::If::DisableInterrupts noInterrupts;
     pwmTimer_.setRisingEdgeCallback(onRisingEdge, this);
     pwmTimer_.setFallingEdgeCallback(onFallingEdge, this);
     stepper_.setTargetPosition(position);
@@ -107,12 +110,17 @@ class Axis : public Clef::Util::Initialized {
   Clef::If::PwmTimer &pwmTimer_;
 };
 
+template <uint32_t SENSOR_USTEPS_PER_MM, uint32_t USTEPS_PER_MM>
+class ExtrusionAxis : public Axis<USTEPS_PER_MM> {};
+
 class Axes : public Clef::Util::Initialized {
  public:
   using XAxis = Axis<USTEPS_PER_MM_X>;
   using YAxis = Axis<USTEPS_PER_MM_Y>;
   using ZAxis = Axis<USTEPS_PER_MM_Z>;
   using EAxis = Axis<USTEPS_PER_MM_E>;
+  // using EAxis = ExtrusionAxis<USTEPS_PER_MM_DISPLACEMENT,
+  // USTEPS_PER_MM_E>;
 
   struct XYEPosition {
     using XPosition = XAxis::StepperPosition;
@@ -172,6 +180,7 @@ class Axes : public Clef::Util::Initialized {
   }
   XAxis::GcodeFeedrate getFeedrate() const { return feedrate_; }
   XYZEPosition getPosition() const {
+    Clef::If::DisableInterrupts noInterrupts;
     return {x_.getPosition(), y_.getPosition(), z_.getPosition(),
             e_.getPosition()};
   }

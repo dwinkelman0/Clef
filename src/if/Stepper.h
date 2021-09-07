@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <if/Interrupts.h>
 #include <stdint.h>
 #include <util/Acquired.h>
 #include <util/Initialized.h>
@@ -46,6 +47,7 @@ class StepperPartial : public Stepper<USTEPS_PER_MM> {
   StepperPartial() : ustepsPerPulse_(1), position_(0), targetPosition_(0) {}
 
   bool init() override {
+    Clef::If::DisableInterrupts noInterrupts;
     Config::EnableRegister::init();
     Config::DirectionRegister::init();
     Config::PulseRegister::init();

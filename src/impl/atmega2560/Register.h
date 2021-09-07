@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <avr/interrupt.h>
 #include <avr/io.h>
 #include <impl/atmega2560/AvrUtils.h>
 
@@ -24,6 +25,18 @@ namespace Clef::Impl::Atmega2560 {
    private:                                                            \
     static const uint8_t shamt_ = REG3(PORT, P, N);                    \
   };
+
+/**
+ * Readable boolean register.
+ */
+#define R_REGISTER_BOOL(P, N)                                                 \
+  {                                                                           \
+   public:                                                                    \
+    static void init() {                                                      \
+      REG2(DDR, P) &= ~(1 << REG3(PIN, P, N)); /*!< Set this pin as input. */ \
+    }                                                                         \
+    static bool read() { return REG2(PIN, P) & (1 << REG3(PIN, P, N)); }      \
+  }
 
 /**
  * Readable boolean register with its own on-change interrupt.
@@ -54,6 +67,15 @@ namespace Clef::Impl::Atmega2560 {
     static void *callbackData_;                                                \
   }
 
+#define RINT_REGISTER_BOOL_ISRS(NAME, INT_NUM)                   \
+  void (*NAME::callback_)(void *); /*!< Define callback. */      \
+  void *NAME::callbackData_;       /*!< Define callback data. */ \
+  ISR(REG3(INT, INT_NUM, _vect)) {                               \
+    if (NAME::callback_) {                                       \
+      NAME::callback_(NAME::callbackData_);                      \
+    }                                                            \
+  }
+
 /**
  * Readable boolean register as part of a group of registers which share the
  * same on-change interrupts.
@@ -82,6 +104,5 @@ namespace Clef::Impl::Atmega2560 {
   }
 
 class WPin8 W_REGISTER_BOOL(H, 5, false);
-class RIntPin2 RINT_REGISTER_BOOL(E, 4, B, 4, RINT_REGISTER_BOOL_EDGE_BOTH);
 class RIntGroupPinA15 RINTGROUP_REGISTER_BOOL(K, 7, 2, 7);
 }  // namespace Clef::Impl::Atmega2560
