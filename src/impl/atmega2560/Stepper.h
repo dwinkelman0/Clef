@@ -10,7 +10,7 @@ namespace Clef::Impl::Atmega2560 {
 class XAxisStepperConfig {
  public:
   class EnableRegister W_REGISTER_BOOL(L, 1, true);       /*!< Pin 48. */
-  class DirectionRegister W_REGISTER_BOOL(D, 7, false);   /*!< Pin 38. */
+  class DirectionRegister W_REGISTER_BOOL(D, 7, true);    /*!< Pin 38. */
   class PulseRegister W_REGISTER_BOOL(G, 1, false);       /*!< Pin 40. */
   class ResolutionRegister0 W_REGISTER_BOOL(L, 3, false); /*!< Pin 46. */
   class ResolutionRegister1 W_REGISTER_BOOL(L, 5, false); /*!< Pin 44. */
@@ -36,7 +36,7 @@ extern YAxisStepper yAxisStepper;
 class ZAxisStepperConfig {
  public:
   class EnableRegister W_REGISTER_BOOL(C, 0, true);       /*!< Pin 37. */
-  class DirectionRegister W_REGISTER_BOOL(A, 5, false);   /*!< Pin 27. */
+  class DirectionRegister W_REGISTER_BOOL(A, 5, true);    /*!< Pin 27. */
   class PulseRegister W_REGISTER_BOOL(A, 7, false);       /*!< Pin 29. */
   class ResolutionRegister0 W_REGISTER_BOOL(C, 2, false); /*!< Pin 35. */
   class ResolutionRegister1 W_REGISTER_BOOL(C, 4, false); /*!< Pin 33. */
@@ -49,7 +49,7 @@ extern ZAxisStepper zAxisStepper;
 class EAxisStepperConfig {
  public:
   class EnableRegister W_REGISTER_BOOL(L, 0, true);       /*!< Pin 49. */
-  class DirectionRegister W_REGISTER_BOOL(G, 2, false);   /*!< Pin 39. */
+  class DirectionRegister W_REGISTER_BOOL(G, 2, true);    /*!< Pin 39. */
   class PulseRegister W_REGISTER_BOOL(G, 0, false);       /*!< Pin 41. */
   class ResolutionRegister0 W_REGISTER_BOOL(L, 2, false); /*!< Pin 47. */
   class ResolutionRegister1 W_REGISTER_BOOL(L, 4, false); /*!< Pin 45. */
