@@ -25,6 +25,8 @@ class PwmTimer : public Clef::Util::Initialized {
    */
   virtual void disable() = 0;
 
+  virtual bool isEnabled() const = 0;
+
   virtual void setFrequency(const Clef::Util::Frequency<float> frequency) = 0;
   virtual Clef::Util::Frequency<float> getMinFrequency() const = 0;
   virtual void setRisingEdgeCallback(const TransitionCallback callback,

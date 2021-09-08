@@ -88,6 +88,10 @@ template class GenericTimer<uint16_t>;
             ~((1 << REG3(OCIE, N, A)) | (1 << REG3(OCIE, N, B)));            \
       }                                                                      \
     }                                                                        \
+    bool isEnabled() const override {                                        \
+      return REG2(TIMSK, N) &                                                \
+             ((1 << REG3(OCIE, N, A)) | (1 << REG3(OCIE, N, B)));            \
+    }                                                                        \
     void setCount(const uint8_t value) override { REG2(TCNT, N) = value; }   \
     uint8_t getCount() const override { return REG2(TCNT, N); }              \
     void setCompareA(const uint8_t value) override {                         \
@@ -149,6 +153,10 @@ template class GenericTimer<uint16_t>;
         REG2(TIMSK, N) &=                                                    \
             ~((1 << REG3(OCIE, N, A)) | (1 << REG3(OCIE, N, B)));            \
       }                                                                      \
+    }                                                                        \
+    bool isEnabled() const override {                                        \
+      return REG2(TIMSK, N) &                                                \
+             ((1 << REG3(OCIE, N, A)) | (1 << REG3(OCIE, N, B)));            \
     }                                                                        \
     void setCount(const uint16_t value) override { REG2(TCNT, N) = value; }  \
     uint16_t getCount() const override { return REG2(TCNT, N); }             \

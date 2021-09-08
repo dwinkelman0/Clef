@@ -4,60 +4,60 @@
 
 namespace Clef::Impl::Emulator {
 
-GenericTimer::GenericTimer(std::shared_ptr<std::mutex> globalMutex)
-    : globalMutex_(globalMutex), frequency_(1.0f), loopIsActive_(false) {}
+GenericTimer::GenericTimer() {}
 
 bool GenericTimer::init() { return true; }
 
-void GenericTimer::enable() {
-  if (loopFuture_.valid()) {
-    loopFuture_.get();
-  }
-  loopFuture_ = std::async(std::launch::async, [this]() {
-    loopIsActive_ = true;
-    const Clef::Util::Time<float, Clef::Util::TimeUnit::USEC> period(
-        frequency_.asTime());
-    bool rising = true;
-    while (loopIsActive_) {
-      std::unique_lock<std::mutex> lock(*globalMutex_);
-      if (rising) {
-        if (risingEdgeCallback_) {
-          risingEdgeCallback_(risingEdgeCallbackData_);
-        }
-      } else {
-        if (fallingEdgeCallback_) {
-          fallingEdgeCallback_(fallingEdgeCallbackData_);
-        }
-      }
-      rising = !rising;
-      std::this_thread::sleep_for(
-          std::chrono::microseconds(static_cast<uint64_t>(*period / 2)));
-    }
-  });
-}
+void GenericTimer::enable() { enabled_ = true; }
 
-void GenericTimer::disable() { loopIsActive_ = false; }
+void GenericTimer::disable() { enabled_ = false; }
 
 void GenericTimer::setFrequency(const Clef::Util::Frequency<float> frequency) {
-  std::unique_lock<std::mutex> lock(*globalMutex_);
   frequency_ = frequency;
 }
 
-Clef::Util::Frequency<float> GenericTimer::getMinFrequency() const {
-  return 0.001;
-}
+Clef::Util::Frequency<float> GenericTimer::getMinFrequency() const { return 0; }
 
 void GenericTimer::setRisingEdgeCallback(const TransitionCallback callback,
                                          void *data) {
-  std::unique_lock<std::mutex> lock(*globalMutex_);
   risingEdgeCallback_ = callback;
   risingEdgeCallbackData_ = data;
 }
 
 void GenericTimer::setFallingEdgeCallback(const TransitionCallback callback,
                                           void *data) {
-  std::unique_lock<std::mutex> lock(*globalMutex_);
   fallingEdgeCallback_ = callback;
   fallingEdgeCallbackData_ = data;
+}
+
+bool GenericTimer::isEnabled() const { return enabled_; }
+
+Clef::Util::Frequency<float> GenericTimer::getFrequency() const {
+  return frequency_;
+}
+
+void GenericTimer::pulseOnce() const {
+  if (enabled_) {
+    if (risingEdgeCallback_) {
+      risingEdgeCallback_(risingEdgeCallbackData_);
+    }
+    if (fallingEdgeCallback_) {
+      fallingEdgeCallback_(fallingEdgeCallbackData_);
+    }
+  }
+}
+
+void GenericTimer::pulseWhile(
+    const std::function<bool(void)> &predicate) const {
+  while (predicate()) {
+    if (enabled_) {
+      if (risingEdgeCallback_) {
+        risingEdgeCallback_(risingEdgeCallbackData_);
+      }
+      if (fallingEdgeCallback_) {
+        fallingEdgeCallback_(fallingEdgeCallbackData_);
+      }
+    }
+  }
 }
 }  // namespace Clef::Impl::Emulator

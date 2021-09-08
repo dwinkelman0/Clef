@@ -48,7 +48,7 @@ class Action {
    */
   virtual bool isFinished(const Context &context) const = 0;
 
- private:
+ protected:
   /**
    * Executed when the action is pushed to the queue.
    */
@@ -93,20 +93,31 @@ class MoveXYE : public Action {
                  const Axes::XAxis::GcodePosition *const endPositionX,
                  const Axes::YAxis::GcodePosition *const endPositionY,
                  const Axes::EAxis::GcodePosition endPositionE);
-  uint16_t getNumPoints() const;
 
-  void onPush(Context &context) override {
-    // context.axes.getX().acquire();
-    // context.axes.getY().acquire();
-    // context.axes.getE().acquire();
-  }
-  void onPop(Context &context) override {}
-  void onStart(Context &context) override {}
-  void onLoop(Context &context) override {}
-  bool isFinished(const Context &context) const override { return true; }
+  /**
+   * Get the number of XYE points added to this segment.
+   */
+  uint32_t getNumPointsPushed() const;
+
+  /**
+   * Check whether a prospective additional XYE point is going in the same
+   * direction as the others.
+   */
+  bool checkNewPointDirection(const Axes::EAxis::GcodePosition &newE) const;
+
+  void onStart(Context &context) override;
+  void onLoop(Context &context) override;
+  bool isFinished(const Context &context) const override;
 
  private:
-  uint16_t numPoints_;
+  void onPush(Context &context) override;
+  void onPop(Context &context) override;
+
+ private:
+  Axes::EAxis::GcodePosition startEPosition_;
+  uint32_t numPointsPushed_;
+  uint32_t numPointsCompleted_;
+  bool hasNewEndPosition_;
 };
 
 class MoveE : public Action {

@@ -14,28 +14,17 @@ MoveXY::MoveXY(const Axes::XYZEPosition &startPosition,
                const Axes::YAxis::GcodePosition *const endPositionY)
     : Action(Type::MOVE_XY, startPosition) {
   if (endPositionX) {
-    endPosition_.x = Axes::XYZEPosition::XPosition(static_cast<int32_t>(
-        *Axes::XAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
-            *endPositionX)));
+    endPosition_.x = *endPositionX;
   }
   if (endPositionY) {
-    endPosition_.y = Axes::XYZEPosition::YPosition(static_cast<int32_t>(
-        *Axes::YAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
-            *endPositionY)));
+    endPosition_.y = *endPositionY;
   }
 }
 
 void MoveXY::onStart(Context &context) {
-  const Axes::XYZEPosition &endPosition = getEndPosition();
-  const Axes::XYZEPosition difference =
-      endPosition - context.actionQueue.getStartPosition();
-  const float magnitude = difference.magnitude();
-  context.axes.getX().setFeedrate(context.axes.getFeedrate() *
-                                  fabs(*difference.x / magnitude));
-  context.axes.getY().setFeedrate(context.axes.getFeedrate() *
-                                  fabs(*difference.y / magnitude));
-  context.axes.getX().setTargetPosition(endPosition.x);
-  context.axes.getY().setTargetPosition(endPosition.y);
+  context.axes.setXyParams(
+      context.actionQueue.getStartPosition().asXyePosition(),
+      getEndPosition().asXyePosition(), context.axes.getFeedrate());
 }
 
 bool MoveXY::isFinished(const Context &context) const {
@@ -54,7 +43,11 @@ void MoveXY::onPop(Context &context) {
 }
 
 MoveXYE::MoveXYE(const Axes::XYZEPosition &startPosition)
-    : Action(Type::MOVE_XYE, startPosition), numPoints_(0) {}
+    : Action(Type::MOVE_XYE, startPosition),
+      startEPosition_(startPosition.e),
+      numPointsPushed_(0),
+      numPointsCompleted_(0),
+      hasNewEndPosition_(false) {}
 
 bool MoveXYE::pushPoint(Context &context,
                         const Axes::XAxis::GcodePosition *const endPositionX,
@@ -64,38 +57,94 @@ bool MoveXYE::pushPoint(Context &context,
   // successfully pushed to the queue.
   Axes::XYZEPosition tempEndPosition = getEndPosition();
   if (endPositionX) {
-    tempEndPosition.x = Axes::XYZEPosition::XPosition(static_cast<int32_t>(
-        *Axes::XAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
-            *endPositionX)));
+    tempEndPosition.x = *endPositionX;
   }
   if (endPositionY) {
-    tempEndPosition.y = Axes::XYZEPosition::YPosition(static_cast<int32_t>(
-        *Axes::YAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
-            *endPositionY)));
+    tempEndPosition.y = *endPositionY;
   }
-  tempEndPosition.e = Axes::XYZEPosition::EPosition(static_cast<int32_t>(
-      *Axes::EAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
-          endPositionE)));
+  tempEndPosition.e = endPositionE;
   if (tempEndPosition != getEndPosition()) {
-    // Require that the point be distinct to prevent division by zero.
+    // Require that the point be distinct to prevent division by zero
     bool output =
         context.xyePositionQueue.push(tempEndPosition.asXyePosition());
-    endPosition_ = tempEndPosition;
-    context.actionQueue.updateXyeSegment(*this);
-    numPoints_++;
+    if (output) {
+      endPosition_ = tempEndPosition;
+      context.actionQueue.updateXyeSegment(*this);
+      numPointsPushed_++;
+      hasNewEndPosition_ = true;
+    }
     return output;
   }
   return true;
 }
 
-uint16_t MoveXYE::getNumPoints() const { return numPoints_; }
+uint32_t MoveXYE::getNumPointsPushed() const { return numPointsPushed_; }
+
+bool MoveXYE::checkNewPointDirection(
+    const Axes::EAxis::GcodePosition &newE) const {
+  if (getNumPointsPushed() == 0) {
+    return true;
+  }
+  return ((startEPosition_ < getEndPosition().e) &&
+          (getEndPosition().e < newE)) ||
+         ((startEPosition_ > getEndPosition().e) &&
+          (getEndPosition().e > newE));
+}
+
+void MoveXYE::onStart(Context &context) {
+  // It should be guaranteed that the queue contains at least one point
+  Axes::XYEPosition endPosition = *context.xyePositionQueue.first();
+  Axes::XYEPosition startPosition =
+      context.actionQueue.getStartPosition().asXyePosition();
+  context.axes.setXyParams(startPosition, endPosition,
+                           context.axes.getFeedrate());
+
+  // TODO: this is just simple for now
+  context.axes.getE().setFeedrate(Axes::EAxis::GcodeFeedrate(120.0f));
+  context.axes.getE().setTargetPosition(getEndPosition().e);
+}
+
+void MoveXYE::onLoop(Context &context) {
+  if (hasNewEndPosition_) {
+    context.axes.getE().setTargetPosition(getEndPosition().e);
+    hasNewEndPosition_ = false;
+  }
+  if (context.axes.getX().isAtTargetPosition() &&
+      context.axes.getY().isAtTargetPosition()) {
+    if (context.xyePositionQueue.first()) {
+      Axes::XYEPosition startPosition = *context.xyePositionQueue.first();
+      context.xyePositionQueue.pop();
+      numPointsCompleted_++;
+      if (numPointsCompleted_ < numPointsPushed_) {
+        Axes::XYEPosition endPosition = *context.xyePositionQueue.first();
+        context.axes.setXyParams(startPosition, endPosition,
+                                 context.axes.getFeedrate());
+      }
+    }
+  }
+}
+
+bool MoveXYE::isFinished(const Context &context) const {
+  return numPointsCompleted_ == numPointsPushed_ &&
+         context.axes.getE().isAtTargetPosition();
+}
+
+void MoveXYE::onPush(Context &context) {
+  context.axes.getX().acquire();
+  context.axes.getY().acquire();
+  context.axes.getE().acquire();
+}
+
+void MoveXYE::onPop(Context &context) {
+  context.axes.getX().release();
+  context.axes.getY().release();
+  context.axes.getE().release();
+}
 
 MoveE::MoveE(const Axes::XYZEPosition &startPosition,
              const Axes::EAxis::GcodePosition endPositionE)
     : Action(Type::MOVE_E, startPosition) {
-  endPosition_.e = Axes::XYZEPosition::EPosition(static_cast<int32_t>(
-      *Axes::EAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
-          endPositionE)));
+  endPosition_.e = endPositionE;
 }
 
 void MoveE::onStart(Context &context) {
@@ -115,9 +164,7 @@ void MoveE::onPop(Context &context) { context.axes.getE().release(); }
 MoveZ::MoveZ(const Axes::XYZEPosition &startPosition,
              const Axes::ZAxis::GcodePosition endPositionZ)
     : Action(Type::MOVE_Z, startPosition) {
-  endPosition_.z = Axes::XYZEPosition::ZPosition(static_cast<int32_t>(
-      *Axes::ZAxis::Position<float, Clef::Util::PositionUnit::USTEP>(
-          endPositionZ)));
+  endPosition_.z = endPositionZ;
 }
 
 void MoveZ::onStart(Context &context) {

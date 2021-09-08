@@ -16,8 +16,6 @@ namespace Clef::Fw {
 template <uint32_t USTEPS_PER_MM>
 class Axis : public Clef::Util::Initialized {
  public:
-  static const uint32_t UstepsPerMm = USTEPS_PER_MM;
-
   template <typename DType, Clef::Util::PositionUnit PositionU>
   using Position = Clef::Util::Position<DType, PositionU, USTEPS_PER_MM>;
   using GcodePosition =
@@ -42,14 +40,20 @@ class Axis : public Clef::Util::Initialized {
 
   void releaseAll() { stepper_.releaseAll(); }
 
-  void setTargetPosition(const StepperPosition position) {
+  void setTargetPosition(const GcodePosition position) {
+    StepperPosition convertedPosition(static_cast<int32_t>(
+        *Position<float, Clef::Util::PositionUnit::USTEP>(position)));
     Clef::If::DisableInterrupts noInterrupts;
     pwmTimer_.setRisingEdgeCallback(onRisingEdge, this);
     pwmTimer_.setFallingEdgeCallback(onFallingEdge, this);
-    stepper_.setTargetPosition(position);
-    if (!isAtTargetPosition()) {
+    stepper_.setTargetPosition(convertedPosition);
+    if (!isAtTargetPosition() && !pwmTimer_.isEnabled()) {
       pwmTimer_.enable();
     }
+  }
+
+  StepperPosition getTargetStepperPosition() const {
+    return stepper_.getTargetPosition();
   }
 
   StepperPosition getPosition() const { return stepper_.getPosition(); }
@@ -143,9 +147,9 @@ class Axes : public Clef::Util::Initialized {
   using EAxis = ExtrusionAxis<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>;
 
   struct XYEPosition {
-    using XPosition = XAxis::StepperPosition;
-    using YPosition = YAxis::StepperPosition;
-    using EPosition = EAxis::StepperPosition;
+    using XPosition = XAxis::GcodePosition;
+    using YPosition = YAxis::GcodePosition;
+    using EPosition = EAxis::GcodePosition;
     XPosition x = 0;
     YPosition y = 0;
     EPosition e = 0;
@@ -155,14 +159,14 @@ class Axes : public Clef::Util::Initialized {
     XYEPosition operator-(const XYEPosition &other) const {
       return {x - other.x, y - other.y, e - other.e};
     }
-    float magnitude() const { return sqrt(*x * *x + *y * *y + *e * *e); }
+    float getXyMagnitude() const { return sqrt(*x * *x + *y * *y); }
   };
 
   struct XYZEPosition {
-    using XPosition = XAxis::StepperPosition;
-    using YPosition = YAxis::StepperPosition;
-    using ZPosition = ZAxis::StepperPosition;
-    using EPosition = EAxis::StepperPosition;
+    using XPosition = XAxis::GcodePosition;
+    using YPosition = YAxis::GcodePosition;
+    using ZPosition = ZAxis::GcodePosition;
+    using EPosition = EAxis::GcodePosition;
     XPosition x = 0;
     YPosition y = 0;
     ZPosition z = 0;
@@ -175,9 +179,7 @@ class Axes : public Clef::Util::Initialized {
     XYZEPosition operator-(const XYZEPosition &other) const {
       return {x - other.x, y - other.y, z - other.z, e - other.e};
     }
-    float magnitude() const {
-      return sqrt(*x * *x + *y * *y + *z * *z + *e * *e);
-    }
+    float getXyMagnitude() const { return sqrt(*x * *x + *y * *y); }
   };
 
   static const XYEPosition originXye;
@@ -205,10 +207,18 @@ class Axes : public Clef::Util::Initialized {
 
   XAxis::GcodeFeedrate getFeedrate() const { return feedrate_; }
 
-  XYZEPosition getPosition() const {
-    Clef::If::DisableInterrupts noInterrupts;
-    return {x_.getPosition(), y_.getPosition(), z_.getPosition(),
-            e_.getPosition()};
+  /**
+   * Set the XY position and feedrate.
+   */
+  void setXyParams(const XYEPosition &startPosition,
+                   const XYEPosition &endPosition,
+                   const XAxis::GcodeFeedrate feedrateMmsPerMin) {
+    const XYEPosition difference = endPosition - startPosition;
+    const float magnitude = difference.getXyMagnitude();
+    getX().setFeedrate(feedrateMmsPerMin * fabs(*difference.x / magnitude));
+    getY().setFeedrate(feedrateMmsPerMin * fabs(*difference.y / magnitude));
+    getX().setTargetPosition(endPosition.x);
+    getY().setTargetPosition(endPosition.y);
   }
 
  private:

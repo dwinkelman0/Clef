@@ -106,9 +106,9 @@ class StepperPartial : public Stepper<USTEPS_PER_MM> {
   void unpulse() override { Config::PulseRegister::write(false); }
 
   void setTargetPosition(const Position position) override {
-    if (position > targetPosition_) {
+    if (position > targetPosition_ && !isIncreasing()) {
       setIncreasing();
-    } else {
+    } else if (position < targetPosition_ && isIncreasing()) {
       setDecreasing();
     }
     targetPosition_ = position;

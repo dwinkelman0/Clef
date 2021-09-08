@@ -220,13 +220,17 @@ bool GcodeParser::handleG1(Context &context, const uint16_t errorBufferSize,
         context, Action::MoveZ(context.actionQueue.getEndPosition(), z));
   }
   if (hasX || hasY) {
-    Axes::XAxis::Position<float, Clef::Util::PositionUnit::MM> xMms(x);
-    Axes::YAxis::Position<float, Clef::Util::PositionUnit::MM> yMms(y);
+    Axes::XAxis::GcodePosition xMms(x);
+    Axes::YAxis::GcodePosition yMms(y);
     if (hasE) {
       ActionQueue::Iterator lastAction = context.actionQueue.last();
-      Axes::EAxis::Position<float, Clef::Util::PositionUnit::MM> eMms(e);
-      if (lastAction && (*lastAction)->getType() == Action::Type::MOVE_XYE) {
-        // If the last action in the queue is MoveXYE, coalesce
+      Axes::EAxis::GcodePosition eMms(e);
+      if (lastAction && (*lastAction)->getType() == Action::Type::MOVE_XYE &&
+          static_cast<Action::MoveXYE *>(*lastAction)
+              ->checkNewPointDirection(eMms)) {
+        // If the last action in the queue is MoveXYE and the extrusion
+        // destination is in the same direction as the current extrusion,
+        // coalesce
         static_cast<Action::MoveXYE *>(*lastAction)
             ->pushPoint(context, hasX ? &xMms : nullptr, hasY ? &yMms : nullptr,
                         eMms);
@@ -235,7 +239,7 @@ bool GcodeParser::handleG1(Context &context, const uint16_t errorBufferSize,
         Action::MoveXYE moveXye(context.actionQueue.getEndPosition());
         moveXye.pushPoint(context, hasX ? &xMms : nullptr,
                           hasY ? &yMms : nullptr, eMms);
-        if (moveXye.getNumPoints() > 0) {
+        if (moveXye.getNumPointsPushed() > 0) {
           context.actionQueue.push(context, moveXye);
         }
       }

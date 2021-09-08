@@ -80,7 +80,7 @@ int main() {
   int currentQueueSize = actionQueue.size();
   while (1) {
     gcodeParser.ingest(context);
-    checkDisplacementSensor();
+    // checkDisplacementSensor();
     if (it) {
       (*it)->onLoop(context);
       if ((*it)->isFinished(context)) {

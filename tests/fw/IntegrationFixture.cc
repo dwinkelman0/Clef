@@ -9,10 +9,10 @@ IntegrationFixture::IntegrationFixture()
       serial_(globalMutex_),
       actionQueue_(),
       parser_(),
-      xAxisTimer_(globalMutex_),
-      yAxisTimer_(globalMutex_),
-      zAxisTimer_(globalMutex_),
-      eAxisTimer_(globalMutex_),
+      xAxisTimer_(),
+      yAxisTimer_(),
+      zAxisTimer_(),
+      eAxisTimer_(),
       displacementSensorInput_(),
       displacementSensor_(clock_, 0.1),
       xAxis_(Clef::Impl::Emulator::xAxisStepper, xAxisTimer_),
@@ -24,6 +24,7 @@ IntegrationFixture::IntegrationFixture()
       context_({axes_, parser_, clock_, serial_, actionQueue_}) {
   clock_.init();
   serial_.init();
+  axes_.init();
   displacementSensorInput_.setConversionCallback(
       DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT,
                          USTEPS_PER_MM_E>::injectWrapper,
