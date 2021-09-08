@@ -1,8 +1,10 @@
 *
 !*/
+!**/*.c
 !**/*.cc
 !**/*.h
 !**/CMakeLists.txt
+!**/*.cmake
 !.gitignore
 
-build
+build-*

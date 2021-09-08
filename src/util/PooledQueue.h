@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <assert.h>
 #include <stdint.h>
 
 /**
@@ -10,6 +11,7 @@
  * lastIndex_, the queue is considered to be empty, so it is not possible for
  * all N elements to be simultaneously occupied.
  */
+namespace Clef::Util {
 template <typename T, uint16_t N>
 class PooledQueue {
  public:
@@ -85,6 +87,7 @@ class PooledQueue {
     int16_t diff = (int16_t)lastIndex_ - (int16_t)firstIndex_;
     return diff < 0 ? diff + N : diff;
   }
+  inline uint16_t getNumSpacesLeft() const { return N - size() - 1; }
 
   /**
    * Allocate a spot in the queue and return the iterator. The iterator is
@@ -139,3 +142,4 @@ class PooledQueue {
   uint16_t lastIndex_ = 0; /*!< Index + 1 of the last item in the queue; indices
                           are in the range [0, N) */
 };
+}  // namespace Clef::Util

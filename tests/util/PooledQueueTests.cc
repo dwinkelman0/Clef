@@ -1,9 +1,9 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
 #include <gtest/gtest.h>
+#include <util/PooledQueue.h>
 
-#include "util/PooledQueue.h"
-
+namespace {
 struct Dummy {
   uint16_t x;
   uint16_t y;
@@ -11,16 +11,19 @@ struct Dummy {
     return x == other.x && y == other.y;
   }
 };
+}  // namespace
 
-TEST(PooledQueue, ZeroSize) {
+namespace Clef::Util {
+TEST(PooledQueueTest, ZeroSize) {
   PooledQueue<Dummy, 8> queue;
   ASSERT_EQ(queue.size(), 0);
+  ASSERT_EQ(queue.getNumSpacesLeft(), 7);
   ASSERT_FALSE(queue.first());
   ASSERT_FALSE(queue.last());
   ASSERT_FALSE(queue.pop());
 }
 
-TEST(PooledQueue, Push) {
+TEST(PooledQueueTest, Push) {
   using Queue = PooledQueue<Dummy, 4>;
   Queue queue;
 
@@ -54,7 +57,7 @@ TEST(PooledQueue, Push) {
   ASSERT_EQ(it2->y, 56);
 }
 
-TEST(PooledQueue, Pop) {
+TEST(PooledQueueTest, Pop) {
   using Queue = PooledQueue<Dummy, 4>;
   Queue queue;
   ASSERT_TRUE(queue.push({0, 0}));
@@ -84,3 +87,4 @@ TEST(PooledQueue, Pop) {
   ASSERT_FALSE(queue.pop());
   ASSERT_EQ(queue.size(), 0);
 }
+}  // namespace Clef::Util
