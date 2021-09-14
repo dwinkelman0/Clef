@@ -14,8 +14,26 @@ class Usart : public Clef::If::RWSerial {
   void writeChar(const char c) override;
   void writeStr(const char *str) override;
   void writeLine(const char *line) override;
+};
+
+extern Usart serial;
+
+class Spi : public Clef::If::RSpi {
+ public:
+  Spi();
+  bool init() override;
+  bool initRead(const uint16_t size,
+                const Clef::Util::Time<uint16_t, Clef::Util::TimeUnit::USEC>
+                    delay) override;
+  void onByteRead();
 
  private:
-  bool isInitialized_ = false; /*!< Prevent multiple initializations. */
+  bool isReady_;
+  const uint16_t maxSize_ = 8;
+  char buffer_[8];
+  uint16_t readSize_;
+  uint16_t numBytesRead_;
 };
+
+extern Spi spi;
 }  // namespace Clef::Impl::Atmega2560

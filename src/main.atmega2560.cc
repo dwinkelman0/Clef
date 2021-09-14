@@ -12,7 +12,6 @@
 #include <stdio.h>
 
 Clef::Impl::Atmega2560::Clock clock(Clef::Impl::Atmega2560::clockTimer);
-Clef::Impl::Atmega2560::Usart serial;
 Clef::Fw::DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>
     displacementSensor(clock, 0.1);
 Clef::Fw::ActionQueue actionQueue;
@@ -28,7 +27,8 @@ Clef::Fw::Axes::EAxis eAxis(Clef::Impl::Atmega2560::eAxisStepper,
                             Clef::Impl::Atmega2560::zeAxisTimer,
                             displacementSensor);
 Clef::Fw::Axes axes(xAxis, yAxis, zAxis, eAxis);
-Clef::Fw::Context context{axes, gcodeParser, clock, serial, actionQueue};
+Clef::Fw::Context context({axes, gcodeParser, clock,
+                           Clef::Impl::Atmega2560::serial, actionQueue});
 
 void status(void *arg) {
   static int counter = 0;
@@ -38,7 +38,7 @@ void status(void *arg) {
     sprintf(buffer, "Position = (%ld, %ld, %ld, %ld)",
             *axes.getX().getPosition(), *axes.getY().getPosition(),
             *axes.getZ().getPosition(), *axes.getE().getPosition());
-    serial.writeLine(buffer);
+    Clef::Impl::Atmega2560::serial.writeLine(buffer);
   }
 }
 
@@ -53,16 +53,31 @@ void checkDisplacementSensor() {
     char buffer[64];
     sprintf(buffer, "Received data: x = %ld, v = %ld",
             static_cast<uint32_t>(*position), static_cast<uint32_t>(*feedrate));
-    serial.writeLine(buffer);
+    Clef::Impl::Atmega2560::serial.writeLine(buffer);
     displacementSensor.release();
   }
 }
 
-int main() {
-  if (clock.init()) {
-    serial.writeLine("Initialized clock");
+void startSpiRead(void *arg) {
+  static int counter = 0;
+  if (counter++ % 64 == 0) {
+    Clef::Impl::Atmega2560::spi.initRead(4, 3);
   }
-  serial.init();
+}
+
+void onSpiReadComplete(const uint16_t size, const char *const data, void *arg) {
+  Clef::If::EnableInterrupts interrupts;
+  char buffer[64];
+  sprintf(buffer, "Received data: %x, %x, %x, %x", data[0], data[1], data[2],
+          data[3]);
+  Clef::Impl::Atmega2560::serial.writeLine(buffer);
+}
+
+int main() {
+  Clef::Impl::Atmega2560::serial.init();
+  if (clock.init()) {
+    Clef::Impl::Atmega2560::serial.writeLine("Initialized clock");
+  }
   axes.init();
 
   Clef::Impl::Atmega2560::extruderCaliper.init();
@@ -71,9 +86,14 @@ int main() {
                                    USTEPS_PER_MM_E>::injectWrapper,
       &displacementSensor);
 
+  Clef::Impl::Atmega2560::spi.init();
+  Clef::Impl::Atmega2560::spi.setReadCompleteCallback(onSpiReadComplete,
+                                                      nullptr);
+
   Clef::Impl::Atmega2560::timer1.init();
   Clef::Impl::Atmega2560::timer1.setFrequency(256.0f);
-  Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(status, nullptr);
+  // Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(status, nullptr);
+  Clef::Impl::Atmega2560::timer1.setFallingEdgeCallback(startSpiRead, nullptr);
   Clef::Impl::Atmega2560::timer1.enable();
 
   Clef::Fw::ActionQueue::Iterator it = actionQueue.first();
@@ -98,7 +118,7 @@ int main() {
     if (newQueueSize != currentQueueSize) {
       char buffer[64];
       sprintf(buffer, "Queue size = %d", newQueueSize);
-      serial.writeLine(buffer);
+      Clef::Impl::Atmega2560::serial.writeLine(buffer);
       currentQueueSize = newQueueSize;
     }
   }
