@@ -93,13 +93,14 @@ class DisplacementSensorTest
 };
 
 TEST_F(DisplacementSensorTest, Filtering) {
-  Time t0(1.0f);
-  Time t1(2.0f);
+  Time t0(1000);
+  Time t1(2000);
   SensorAnalogPosition x0(1.0f);
   SensorAnalogPosition x1(2.0f);
   AxisFeedrate speed(
       AxisPosition(*SensorUstepsPosition(SensorAnalogPosition(x1 - x0))),
-      Clef::Util::Time<float, Clef::Util::TimeUnit::MIN>(Time(t1 - t0)));
+      Clef::Util::Time<float, Clef::Util::TimeUnit::MIN>(
+          Clef::Util::Time<float, Clef::Util::TimeUnit::USEC>(*(t1 - t0))));
   this->onCurrentUpdate({t0, x0});
   this->onCurrentUpdate({t1, x1});
   EXPECT_LT(abs(*readFeedrate() - *speed / 10), 1);

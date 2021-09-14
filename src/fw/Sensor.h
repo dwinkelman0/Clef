@@ -25,7 +25,11 @@ class Sensor {
   };
 
  public:
-  using Time = Clef::Util::Time<float, Clef::Util::TimeUnit::USEC>;
+  /**
+   * It is important that time be an integer so that it maintains precision at
+   * high values.
+   */
+  using Time = Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC>;
   struct DataPoint {
     Time time;
     DType data;
@@ -164,7 +168,7 @@ class DisplacementSensor
               SensorAnalogPosition(dataPoint.data - lastDataPoint_.data)),
           Clef::Util::Time<float, Clef::Util::TimeUnit::MIN>(
               Clef::Util::Time<float, Clef::Util::TimeUnit::USEC>(
-                  dataPoint.time - lastDataPoint_.time)));
+                  *(dataPoint.time - lastDataPoint_.time))));
       currentFeedrate_ = currentFeedrate_ * (1 - lowPassFilterCoefficient_) +
                          newFeedrate * lowPassFilterCoefficient_;
     }
