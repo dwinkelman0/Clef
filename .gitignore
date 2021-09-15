@@ -5,6 +5,7 @@
 !**/*.h
 !**/CMakeLists.txt
 !**/*.cmake
+!**/*.py
 !.gitignore
 
 build-*
