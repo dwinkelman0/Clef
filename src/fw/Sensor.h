@@ -45,7 +45,7 @@ class Sensor {
    * Provide a data point from an external source.
    */
   void inject(DType data) {
-    DataPoint dataPoint = {*clock_.getMicros(), data};
+    DataPoint dataPoint({*clock_.getMicros(), data});
     Clef::If::DisableInterrupts noInterrupts;
     switch (state_) {
       case State::NO_DATA:
@@ -189,6 +189,50 @@ class DisplacementSensor
  private:
   AxisFeedrate currentFeedrate_;
   DataPoint lastDataPoint_;
+  float lowPassFilterCoefficient_;
+};
+
+/**
+ * Pressure is a dimensionless unit since there is no need for conversions and
+ * the numbers from the sensor have no physical interpretation.
+ */
+class PressureSensor : public Sensor<uint16_t> {
+ public:
+  PressureSensor(Clef::If::Clock &clock, const float lowPassFilterCoefficient)
+      : Sensor<uint16_t>(clock),
+        currentPressure_(0),
+        lowPassFilterCoefficient_(lowPassFilterCoefficient) {}
+
+  /**
+   * Inject wrapper is tailored for the SPI callback format.
+   */
+  static void injectWrapper(const uint16_t numData, const char *const data,
+                            void *arg) {
+    PressureSensor *sensor = reinterpret_cast<PressureSensor *>(arg);
+    uint16_t hi = static_cast<uint16_t>(data[0]);
+    uint16_t lo = static_cast<uint16_t>(data[1]);
+    uint16_t rawData = ((hi << 8) | lo) & static_cast<uint16_t>(0x3fff);
+    sensor->inject(rawData);
+  }
+
+  float readPressure() const { return currentPressure_; }
+
+ protected:
+  void onCurrentUpdate(const DataPoint dataPoint) override {
+    currentPressure_ =
+        currentPressure_ * (1 - lowPassFilterCoefficient_) +
+        static_cast<float>(dataPoint.data) * lowPassFilterCoefficient_;
+  }
+
+ private:
+  /**
+   * Make the underlying read() function private since it does not have
+   * filtering.
+   */
+  DataPoint read() const { return Sensor<uint16_t>::read(); }
+
+ private:
+  float currentPressure_;
   float lowPassFilterCoefficient_;
 };
 }  // namespace Clef::Fw

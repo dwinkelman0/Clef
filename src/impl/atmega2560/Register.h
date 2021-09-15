@@ -35,6 +35,7 @@ namespace Clef::Impl::Atmega2560 {
     static void init() {                                                      \
       REG2(DDR, P) &= ~(1 << REG3(PIN, P, N)); /*!< Set this pin as input. */ \
     }                                                                         \
+    static void setPullUp() { REG2(PORT, P) |= 1 << REG3(PORT, P, N); }       \
     static bool read() { return REG2(PIN, P) & (1 << REG3(PIN, P, N)); }      \
   }
 

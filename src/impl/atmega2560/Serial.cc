@@ -45,10 +45,10 @@ void Usart::writeLine(const char *line) {
 Usart serial;
 
 namespace {
-class WPinSS W_REGISTER_BOOL(B, 0, true);
-class WPinSCK W_REGISTER_BOOL(B, 1, false);
-class WPinMOSI W_REGISTER_BOOL(B, 2, false);
-class WPinMISO R_REGISTER_BOOL(B, 3);
+class WPinSS W_REGISTER_BOOL(B, 0, true);    /*!< Pin 53. */
+class WPinSCK W_REGISTER_BOOL(B, 1, false);  /*!< Pin 52. */
+class WPinMOSI W_REGISTER_BOOL(B, 2, false); /*!< Pin 51. */
+class WPinMISO R_REGISTER_BOOL(B, 3);        /*!< Pin 50. */
 }  // namespace
 
 Spi::Spi()
@@ -60,6 +60,7 @@ bool Spi::init() {
   WPinSCK::init();
   WPinMOSI::init();
   WPinMISO::init();
+  WPinMISO::setPullUp();
   SPCR = (1 << SPE) |
          (1 << MSTR);  /*!< Enable SPI in master mode; implicitly set CPOL as 0,
                           CPHA as 0, and data order as MSB-first. */

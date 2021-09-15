@@ -14,6 +14,7 @@
 Clef::Impl::Atmega2560::Clock clock(Clef::Impl::Atmega2560::clockTimer);
 Clef::Fw::DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>
     displacementSensor(clock, 0.1);
+Clef::Fw::PressureSensor pressureSensor(clock, 0.01);
 Clef::Fw::ActionQueue actionQueue;
 Clef::Fw::XYEPositionQueue xyePositionQueue;
 Clef::Fw::GcodeParser gcodeParser;
@@ -42,36 +43,28 @@ void status(void *arg) {
   }
 }
 
-void checkDisplacementSensor() {
+void checkSensors() {
   if (displacementSensor.checkOut()) {
-    Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
-                         USTEPS_PER_MM_E>
-        position = displacementSensor.readPosition();
-    Clef::Util::Feedrate<float, Clef::Util::PositionUnit::USTEP,
-                         Clef::Util::TimeUnit::MIN, USTEPS_PER_MM_E>
-        feedrate = displacementSensor.readFeedrate();
-    char buffer[64];
-    sprintf(buffer, "Received data: x = %ld, v = %ld",
-            static_cast<uint32_t>(*position), static_cast<uint32_t>(*feedrate));
-    Clef::Impl::Atmega2560::serial.writeLine(buffer);
+    if (pressureSensor.checkOut()) {
+      Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
+                           USTEPS_PER_MM_E>
+          position = displacementSensor.readPosition();
+      Clef::Util::Feedrate<float, Clef::Util::PositionUnit::USTEP,
+                           Clef::Util::TimeUnit::MIN, USTEPS_PER_MM_E>
+          feedrate = displacementSensor.readFeedrate();
+      char buffer[64];
+      sprintf(buffer, "Received data: x = %ld, v = %ld, P = %ld",
+              static_cast<uint32_t>(*position),
+              static_cast<uint32_t>(*feedrate),
+              static_cast<uint32_t>(pressureSensor.readPressure()));
+      Clef::Impl::Atmega2560::serial.writeLine(buffer);
+      pressureSensor.release();
+    }
     displacementSensor.release();
   }
 }
 
-void startSpiRead(void *arg) {
-  static int counter = 0;
-  if (counter++ % 64 == 0) {
-    Clef::Impl::Atmega2560::spi.initRead(4, 3);
-  }
-}
-
-void onSpiReadComplete(const uint16_t size, const char *const data, void *arg) {
-  Clef::If::EnableInterrupts interrupts;
-  char buffer[64];
-  sprintf(buffer, "Received data: %x, %x, %x, %x", data[0], data[1], data[2],
-          data[3]);
-  Clef::Impl::Atmega2560::serial.writeLine(buffer);
-}
+void startSpiRead(void *arg) { Clef::Impl::Atmega2560::spi.initRead(4, 20); }
 
 int main() {
   Clef::Impl::Atmega2560::serial.init();
@@ -87,12 +80,12 @@ int main() {
       &displacementSensor);
 
   Clef::Impl::Atmega2560::spi.init();
-  Clef::Impl::Atmega2560::spi.setReadCompleteCallback(onSpiReadComplete,
-                                                      nullptr);
+  Clef::Impl::Atmega2560::spi.setReadCompleteCallback(
+      Clef::Fw::PressureSensor::injectWrapper, &pressureSensor);
 
   Clef::Impl::Atmega2560::timer1.init();
   Clef::Impl::Atmega2560::timer1.setFrequency(256.0f);
-  // Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(status, nullptr);
+  Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(status, nullptr);
   Clef::Impl::Atmega2560::timer1.setFallingEdgeCallback(startSpiRead, nullptr);
   Clef::Impl::Atmega2560::timer1.enable();
 
@@ -100,7 +93,7 @@ int main() {
   int currentQueueSize = actionQueue.size();
   while (1) {
     gcodeParser.ingest(context);
-    checkDisplacementSensor();
+    checkSensors();
     if (it) {
       (*it)->onLoop(context);
       if ((*it)->isFinished(context)) {
