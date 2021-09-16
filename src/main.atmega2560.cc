@@ -53,7 +53,7 @@ void checkSensors() {
                            Clef::Util::TimeUnit::MIN, USTEPS_PER_MM_E>
           feedrate = displacementSensor.readFeedrate();
       char buffer[64];
-      sprintf(buffer, ";Received data: x = %ld, v = %ld, P = %ld",
+      sprintf(buffer, ";x = %ld, v = %ld, P = %ld",
               static_cast<uint32_t>(*position),
               static_cast<uint32_t>(*feedrate),
               static_cast<uint32_t>(pressureSensor.readPressure()));
@@ -111,7 +111,7 @@ int main() {
     if (newQueueSize != currentQueueSize) {
       char buffer[64];
       sprintf(buffer, ";Queue size = %d", newQueueSize);
-      // Clef::Impl::Atmega2560::serial.writeLine(buffer);
+      Clef::Impl::Atmega2560::serial.writeLine(buffer);
       currentQueueSize = newQueueSize;
     }
   }

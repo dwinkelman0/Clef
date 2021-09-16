@@ -23,6 +23,7 @@ def printFromFile(fname, port, baud):
             print("> {}:".format(line[:-1]).ljust(60, "."), end="")
             success = False
             timeout = 0.001
+            isFirstLine = True
             while not success:
                 ser.write(line.encode('utf-8'))
                 time.sleep(0.001)
@@ -31,6 +32,7 @@ def printFromFile(fname, port, baud):
                     message = ser.readline().decode('utf-8').rstrip()
                 if message == "ok":
                     success = True
+                    isFirstLine = False
                     print("ok")
                 elif message == "alloc_error":
                     time.sleep(timeout)
@@ -38,13 +40,20 @@ def printFromFile(fname, port, baud):
                     timeout = min(timeout, 0.1)
                     print(message)
                     print("".ljust(60, " "), end="")
-                elif message[0] != ";":
+                elif message[0] == ";":
+                    print(message)
+                    print("".ljust(60, " "), end="")
+                elif not isFirstLine:
                     print(message)
                     print("Encountered error, exiting!")
                     return
         print("Done printing!")
-        for line in ser:
-            print("Extra line: {}".format(line))
+        while True:
+            for line in ser:
+                if line[0] == ";":
+                    print(line)
+                else:
+                    print("Extra line: {}".format(line))
 
 
 if __name__ == "__main__":
