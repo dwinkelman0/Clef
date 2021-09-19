@@ -3,20 +3,54 @@
 #pragma once
 
 #include <if/Serial.h>
+#include <impl/atmega2560/AvrUtils.h>
+#include <impl/atmega2560/Config.h>
 #include <stdint.h>
 
-namespace Clef::Impl::Atmega2560 {
-class Usart : public Clef::If::RWSerial {
- public:
-  bool init() override;
-  bool isReadyToRead() const override;
-  bool read(char *const c) override;
-  void writeChar(const char c) override;
-  void writeStr(const char *str) override;
-  void writeLine(const char *line) override;
-};
+extern "C" {
+#define USE_USART0
+#include "usart/usart.h"
+}
 
-extern Usart serial;
+namespace Clef::Impl::Atmega2560 {
+#define USART(N)                                                        \
+ public                                                                 \
+  Clef::If::RWSerial {                                                  \
+   public:                                                              \
+    bool init() override {                                              \
+      if (Clef::Util::Initialized::init()) {                            \
+        REG3(uart, N, _init)(BAUD_CALC(SERIAL_BAUDRATE));               \
+        return true;                                                    \
+      }                                                                 \
+      return false;                                                     \
+    }                                                                   \
+    bool isReadyToRead() const override {                               \
+      return REG3(uart, N, _AvailableBytes)() > 0;                      \
+    };                                                                  \
+    bool read(char *const c) override {                                 \
+      if (isReadyToRead()) {                                            \
+        *c = REG3(uart, N, _getc)();                                    \
+        return true;                                                    \
+      } else {                                                          \
+        *c = '\0';                                                      \
+        return false;                                                   \
+      }                                                                 \
+    };                                                                  \
+    void writeChar(const char c) override { REG3(uart, N, _putc)(c); }; \
+    void writeStr(const char *str) override {                           \
+      REG3(uart, N, _putstr)(const_cast<char *>(str));                  \
+    };                                                                  \
+    void writeLine(const char *line) override {                         \
+      writeStr(line);                                                   \
+      writeChar('\n');                                                  \
+    }                                                                   \
+  }
+
+class Usart0 : USART(0);
+extern Usart0 serial;
+
+class Usart1 : USART(1);
+extern Usart1 serial1;
 
 class Spi : public Clef::If::RSpi {
  public:

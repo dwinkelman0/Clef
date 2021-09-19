@@ -3,46 +3,12 @@
 #include "Serial.h"
 
 #include <if/Interrupts.h>
-#include <impl/atmega2560/Config.h>
 #include <impl/atmega2560/Register.h>
 #include <util/delay.h>
 
-extern "C" {
-#define USE_USART0
-#include "usart/usart.h"
-}
-
 namespace Clef::Impl::Atmega2560 {
-bool Usart::init() {
-  if (Clef::Util::Initialized::init()) {
-    uart_init(BAUD_CALC(SERIAL_BAUDRATE));
-    return true;
-  }
-  return false;
-}
-
-bool Usart::isReadyToRead() const { return uart_AvailableBytes() > 0; }
-
-bool Usart::read(char *const c) {
-  if (isReadyToRead()) {
-    *c = uart_getc();
-    return true;
-  } else {
-    *c = '\0';
-    return false;
-  }
-}
-
-void Usart::writeChar(const char c) { uart_putc(c); }
-
-void Usart::writeStr(const char *str) { uart_putstr(const_cast<char *>(str)); }
-
-void Usart::writeLine(const char *line) {
-  writeStr(line);
-  writeChar('\n');
-}
-
-Usart serial;
+Usart0 serial;
+Usart1 serial1;
 
 namespace {
 class WPinSS W_REGISTER_BOOL(B, 0, true);    /*!< Pin 53. */

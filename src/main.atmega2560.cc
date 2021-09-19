@@ -4,6 +4,7 @@
 #include <fw/GcodeParser.h>
 #include <if/Interrupts.h>
 #include <impl/atmega2560/Clock.h>
+#include <impl/atmega2560/LimitSwitch.h>
 #include <impl/atmega2560/PwmTimer.h>
 #include <impl/atmega2560/Register.h>
 #include <impl/atmega2560/SensorInput.h>
@@ -57,7 +58,7 @@ void checkSensors() {
               static_cast<uint32_t>(*position),
               static_cast<uint32_t>(*feedrate),
               static_cast<uint32_t>(pressureSensor.readPressure()));
-      // Clef::Impl::Atmega2560::serial.writeLine(buffer);
+      Clef::Impl::Atmega2560::serial1.writeLine(buffer);
       pressureSensor.release();
     }
     displacementSensor.release();
@@ -66,12 +67,32 @@ void checkSensors() {
 
 void startSpiRead(void *arg) { Clef::Impl::Atmega2560::spi.initRead(4, 20); }
 
+void limitSwitchAction(void *arg) {
+  Clef::If::EnableInterrupts interrupts;
+  char buffer[64];
+  sprintf(buffer, ";Limit switch %s", static_cast<const char *>(arg));
+  Clef::Impl::Atmega2560::serial.writeLine(buffer);
+}
+
 int main() {
   Clef::Impl::Atmega2560::serial.init();
+  Clef::Impl::Atmega2560::serial1.init();
   if (clock.init()) {
     Clef::Impl::Atmega2560::serial.writeLine(";;;;;;;;");
   }
   axes.init();
+
+  Clef::Impl::Atmega2560::limitSwitches.init();
+  Clef::Impl::Atmega2560::limitSwitches.getX().setTriggerCallback(
+      limitSwitchAction, const_cast<char *>("X"));
+  Clef::Impl::Atmega2560::limitSwitches.getY().setTriggerCallback(
+      limitSwitchAction, const_cast<char *>("Y"));
+  Clef::Impl::Atmega2560::limitSwitches.getZ().setTriggerCallback(
+      limitSwitchAction, const_cast<char *>("Z"));
+  Clef::Impl::Atmega2560::limitSwitches.getEInc().setTriggerCallback(
+      limitSwitchAction, const_cast<char *>("E+"));
+  Clef::Impl::Atmega2560::limitSwitches.getEDec().setTriggerCallback(
+      limitSwitchAction, const_cast<char *>("E-"));
 
   Clef::Impl::Atmega2560::extruderCaliper.init();
   Clef::Impl::Atmega2560::extruderCaliper.setConversionCallback(
