@@ -24,6 +24,7 @@ class RWSerial : public RSerial {
   virtual void writeChar(const char c) = 0;
   virtual void writeStr(const char *str) = 0;
   virtual void writeLine(const char *line) = 0;
+  virtual void writeUint64(const uint64_t x) = 0;
 };
 
 /**

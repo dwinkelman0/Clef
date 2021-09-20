@@ -15,7 +15,7 @@
 Clef::Impl::Atmega2560::Clock clock(Clef::Impl::Atmega2560::clockTimer);
 Clef::Fw::DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>
     displacementSensor(clock, 0.1);
-Clef::Fw::PressureSensor pressureSensor(clock, 0.01);
+Clef::Fw::PressureSensor pressureSensor(clock, 1);
 Clef::Fw::ActionQueue actionQueue;
 Clef::Fw::XYEPositionQueue xyePositionQueue;
 Clef::Fw::GcodeParser gcodeParser;
@@ -44,30 +44,54 @@ void status(void *arg) {
   }
 }
 
+void extruderStatus(void *arg) {
+  static int counter = 0;
+  if (counter++ % 10 == 0) {
+    Clef::If::EnableInterrupts interrupts;
+    typename Clef::Fw::Axes::EAxis::StepperPosition position =
+        axes.getE().getPosition();
+    Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time =
+        clock.getMicros();
+    char buffer[64];
+    sprintf(buffer, ",xe=%ld", static_cast<uint32_t>(*position));
+    Clef::Impl::Atmega2560::serial1.writeStr(";t=");
+    Clef::Impl::Atmega2560::serial1.writeUint64(*time);
+    Clef::Impl::Atmega2560::serial1.writeLine(buffer);
+  }
+}
+
 void checkSensors() {
   if (displacementSensor.checkOut()) {
-    if (pressureSensor.checkOut()) {
-      Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
-                           USTEPS_PER_MM_E>
-          position = displacementSensor.readPosition();
-      Clef::Util::Feedrate<float, Clef::Util::PositionUnit::USTEP,
-                           Clef::Util::TimeUnit::MIN, USTEPS_PER_MM_E>
-          feedrate = displacementSensor.readFeedrate();
-      char buffer[64];
-      sprintf(buffer, ";x = %ld, v = %ld, P = %ld",
-              static_cast<uint32_t>(*position),
-              static_cast<uint32_t>(*feedrate),
-              static_cast<uint32_t>(pressureSensor.readPressure()));
-      Clef::Impl::Atmega2560::serial1.writeLine(buffer);
-      pressureSensor.release();
-    }
+    Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
+                         USTEPS_PER_MM_E>
+        position = displacementSensor.readPosition();
+    Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time =
+        displacementSensor.getMeasurementTime();
+    char buffer[64];
+    Clef::If::EnableInterrupts interrupts;
+    sprintf(buffer, ",xs=%ld", static_cast<uint32_t>(*position));
+    Clef::Impl::Atmega2560::serial1.writeStr(";t=");
+    Clef::Impl::Atmega2560::serial1.writeUint64(*time);
+    Clef::Impl::Atmega2560::serial1.writeLine(buffer);
     displacementSensor.release();
+  }
+  if (pressureSensor.checkOut()) {
+    float pressure = pressureSensor.readPressure();
+    Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time =
+        pressureSensor.getMeasurementTime();
+    char buffer[64];
+    Clef::If::EnableInterrupts interrupts;
+    sprintf(buffer, ",P=%ld", static_cast<uint32_t>(pressure));
+    Clef::Impl::Atmega2560::serial1.writeStr(";t=");
+    Clef::Impl::Atmega2560::serial1.writeUint64(*time);
+    Clef::Impl::Atmega2560::serial1.writeLine(buffer);
+    pressureSensor.release();
   }
 }
 
 void startSpiRead(void *arg) { Clef::Impl::Atmega2560::spi.initRead(4, 20); }
 
-void limitSwitchAction(void *arg) {
+void limitSwitchAction(void *arg, const uint8_t arg2) {
   Clef::If::EnableInterrupts interrupts;
   char buffer[64];
   sprintf(buffer, ";Limit switch %s", static_cast<const char *>(arg));
@@ -84,15 +108,15 @@ int main() {
 
   Clef::Impl::Atmega2560::limitSwitches.init();
   Clef::Impl::Atmega2560::limitSwitches.getX().setTriggerCallback(
-      limitSwitchAction, const_cast<char *>("X"));
+      limitSwitchAction, const_cast<char *>("X"), 0);
   Clef::Impl::Atmega2560::limitSwitches.getY().setTriggerCallback(
-      limitSwitchAction, const_cast<char *>("Y"));
+      limitSwitchAction, const_cast<char *>("Y"), 1);
   Clef::Impl::Atmega2560::limitSwitches.getZ().setTriggerCallback(
-      limitSwitchAction, const_cast<char *>("Z"));
+      limitSwitchAction, const_cast<char *>("Z"), 2);
   Clef::Impl::Atmega2560::limitSwitches.getEInc().setTriggerCallback(
-      limitSwitchAction, const_cast<char *>("E+"));
+      limitSwitchAction, const_cast<char *>("E+"), 3);
   Clef::Impl::Atmega2560::limitSwitches.getEDec().setTriggerCallback(
-      limitSwitchAction, const_cast<char *>("E-"));
+      limitSwitchAction, const_cast<char *>("E-"), 4);
 
   Clef::Impl::Atmega2560::extruderCaliper.init();
   Clef::Impl::Atmega2560::extruderCaliper.setConversionCallback(
@@ -105,8 +129,8 @@ int main() {
       Clef::Fw::PressureSensor::injectWrapper, &pressureSensor);
 
   Clef::Impl::Atmega2560::timer1.init();
-  Clef::Impl::Atmega2560::timer1.setFrequency(256.0f);
-  Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(status, nullptr);
+  Clef::Impl::Atmega2560::timer1.setFrequency(100.0f);
+  Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(extruderStatus, nullptr);
   Clef::Impl::Atmega2560::timer1.setFallingEdgeCallback(startSpiRead, nullptr);
   Clef::Impl::Atmega2560::timer1.enable();
 
@@ -132,7 +156,7 @@ int main() {
     if (newQueueSize != currentQueueSize) {
       char buffer[64];
       sprintf(buffer, ";Queue size = %d", newQueueSize);
-      Clef::Impl::Atmega2560::serial.writeLine(buffer);
+      Clef::Impl::Atmega2560::serial1.writeLine(buffer);
       currentQueueSize = newQueueSize;
     }
   }

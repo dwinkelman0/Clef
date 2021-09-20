@@ -8,10 +8,10 @@ class LimitSwitchTest : public Clef::Impl::Emulator::LimitSwitch,
                         public testing::Test {
  public:
   LimitSwitchTest() : callbackWasFired_(false) {
-    setTriggerCallback(callback, this);
+    setTriggerCallback(callback, this, 0);
   }
 
-  static void callback(void *arg) {
+  static void callback(void *arg, const uint8_t arg2) {
     LimitSwitchTest *test = reinterpret_cast<LimitSwitchTest *>(arg);
     test->callbackWasFired_ = true;
   }

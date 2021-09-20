@@ -13,9 +13,34 @@ extern "C" {
 }
 
 namespace Clef::Impl::Atmega2560 {
+class UsartPartial : public Clef::If::RWSerial {
+ public:
+  void writeUint64(const uint64_t x) override {
+    char buffer[24];
+    uint8_t numChars = 0;
+    uint64_t remainder = x;
+    if (remainder == 0) {
+      buffer[0] = '0';
+      numChars = 1;
+    } else {
+      while (remainder > 0) {
+        uint8_t digit = remainder % 10;
+        buffer[numChars++] = '0' + digit;
+        remainder /= 10;
+      }
+    }
+    char buffer2[24];
+    for (int i = numChars - 1, j = 0; j < numChars; --i, ++j) {
+      buffer2[j] = buffer[i];
+    }
+    buffer2[numChars] = '\0';
+    writeStr(buffer2);
+  }
+};
+
 #define USART(N)                                                        \
  public                                                                 \
-  Clef::If::RWSerial {                                                  \
+  UsartPartial {                                                        \
    public:                                                              \
     bool init() override {                                              \
       if (Clef::Util::Initialized::init()) {                            \

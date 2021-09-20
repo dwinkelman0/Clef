@@ -159,6 +159,8 @@ class DisplacementSensor
 
   AxisFeedrate readFeedrate() const { return currentFeedrate_; }
 
+  typename SensorIf::Time getMeasurementTime() const { return read().time; }
+
  protected:
   void onCurrentUpdate(const DataPoint dataPoint) override {
     if (lastDataPoint_.time > 0) {
@@ -216,6 +218,10 @@ class PressureSensor : public Sensor<uint16_t> {
   }
 
   float readPressure() const { return currentPressure_; }
+
+  typename Sensor<uint16_t>::Time getMeasurementTime() const {
+    return read().time;
+  }
 
  protected:
   void onCurrentUpdate(const DataPoint dataPoint) override {

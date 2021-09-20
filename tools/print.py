@@ -5,7 +5,6 @@
 import argparse
 import os
 import serial
-import subprocess
 import sys
 import time
 
@@ -29,7 +28,7 @@ def printFromFile(fname, port, baud):
                 time.sleep(0.001)
                 message = ""
                 while message == "":
-                    message = ser.readline().decode('utf-8').rstrip()
+                    message = ser.readline().decode("utf-8").rstrip()
                 if message == "ok":
                     success = True
                     isFirstLine = False

@@ -2,12 +2,13 @@
 
 #pragma once
 
+#include <stdint.h>
 #include <util/Initialized.h>
 
 namespace Clef::If {
 class LimitSwitch : public Util::Initialized {
  public:
-  using TriggerCallback = void (*)(void *);
+  using TriggerCallback = void (*)(void *, const uint8_t);
 
   LimitSwitch();
 
@@ -16,7 +17,8 @@ class LimitSwitch : public Util::Initialized {
    */
   void reset();
 
-  void setTriggerCallback(const TriggerCallback callback, void *data);
+  void setTriggerCallback(const TriggerCallback callback, void *data1,
+                          const uint8_t data2);
 
   /**
    * Returns whether the limit switch is in the "triggered" state.
@@ -40,7 +42,8 @@ class LimitSwitch : public Util::Initialized {
   virtual bool getInputState() const = 0;
 
   TriggerCallback triggerCallback_;
-  void *triggerCallbackData_;
+  void *triggerCallbackData1_;
+  uint8_t triggerCallbackData2_;
   bool hasBeenTriggered_;
 };
 }  // namespace Clef::If
