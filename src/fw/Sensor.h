@@ -210,9 +210,13 @@ class PressureSensor : public Sensor<uint16_t> {
    */
   static void injectWrapper(const uint16_t numData, const char *const data,
                             void *arg) {
+    if (static_cast<uint8_t>(data[0]) & 0x80) {
+      // Either a fault or stale data.
+      return;
+    }
     PressureSensor *sensor = reinterpret_cast<PressureSensor *>(arg);
-    uint16_t hi = static_cast<uint16_t>(data[0]);
-    uint16_t lo = static_cast<uint16_t>(data[1]);
+    uint16_t hi = static_cast<uint16_t>(static_cast<uint8_t>(data[0]));
+    uint16_t lo = static_cast<uint16_t>(static_cast<uint8_t>(data[1]));
     uint16_t rawData = ((hi << 8) | lo) & static_cast<uint16_t>(0x3fff);
     sensor->inject(rawData);
   }

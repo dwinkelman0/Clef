@@ -12,17 +12,18 @@ import re
 
 import numpy as np
 
+
+DATAPOINT_RE_STR = "[a-zA-Z]+=-?\d+"
+VALID_LINE_RE = re.compile(";({0},)*{0}".format(DATAPOINT_RE_STR))
+DATAPOINT_RE = re.compile(DATAPOINT_RE_STR)
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--port", type=str, default="/dev/ttyUSB0")
 parser.add_argument("--baud", type=int, default=57600)
 parser.add_argument("--output-dir", type=str, default="data-{}".format(
     datetime.datetime.now().isoformat()))
 parser.add_argument("--time", type=int, default=0)
-
-
-DATAPOINT_RE_STR = "[a-zA-Z]+=\d+"
-VALID_LINE_RE = re.compile(";({0},)*{0}".format(DATAPOINT_RE_STR))
-DATAPOINT_RE = re.compile(DATAPOINT_RE_STR)
 
 
 def parseDatapoint(datapoint):
@@ -49,10 +50,12 @@ def collect(dirname, port, baud, runtime):
             for datapoint in datapoints[1:]:
                 count += 1
                 name, value = parseDatapoint(datapoint)
+                if name == "t":
+                    continue
                 if not name in data:
                     data[name] = []
                 array = data[name]
-                array.append(value)
+                array.append((t, value))
             if count % 500 == 0:
                 print("Collected {} samples".format(count))
     except KeyboardInterrupt:
@@ -61,7 +64,7 @@ def collect(dirname, port, baud, runtime):
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     for name, array in data.items():
-        fname = "{0}/{1}.npy".format(dirname, name)
+        fname = "{0}/{1}-vs-t.npy".format(dirname, name)
         print("Saving {0} samples to {1}....".format(len(array), fname))
         np.save(fname, np.array(array))
 

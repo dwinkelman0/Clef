@@ -81,7 +81,7 @@ void checkSensors() {
         pressureSensor.getMeasurementTime();
     char buffer[64];
     Clef::If::EnableInterrupts interrupts;
-    sprintf(buffer, ",P=%ld", static_cast<uint32_t>(pressure));
+    sprintf(buffer, ",P=%ld", static_cast<int32_t>(pressure));
     Clef::Impl::Atmega2560::serial1.writeStr(";t=");
     Clef::Impl::Atmega2560::serial1.writeUint64(*time);
     Clef::Impl::Atmega2560::serial1.writeLine(buffer);
