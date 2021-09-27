@@ -194,7 +194,7 @@ if __name__ == "__main__":
         components = name.split(".")[0].split("-")
         key = (components[2], components[0])
         data[key] = (key, normalize(key, array))
-    data[("t", "P")] = (("t", "P"), lowpassFilter(data[("t", "P")][1], 0.01))
+    data[("t", "P")] = (("t", "P"), data[("t", "P")][1])
     plotSeries([data[("t", "xe")], data[("t", "xs")]],
                "{}/displacement.png".format(args.input_dir))
     plotSeries([data[("t", "P")]],

@@ -48,13 +48,13 @@ def F(x, u, deltat):
     (xein,) = u.T[0]  # TODO: redefine
     return np.array([
         [1, deltat, 0, 0, 0, 0, 0, 0, ],  # dmux/dx
-        [-beta, 1, 0, 0, xe - mux - deltax0, 0, -beta, beta, ],  # dmuxprime/dx
-        [-alpha, 0, 1, xe - mux - deltax0, 0, 1, -alpha, alpha, ],  # dP/dx
+        [-beta, 0, 0, 0, xe - mux - deltax0, 0, -beta, beta, ],  # dmuxprime/dx
+        [-alpha, 0, 0, xe - mux - deltax0, 0, 1, -alpha, alpha, ],  # dP/dx
         [0, 0, 0, 1, 0, 0, 0, 0, ],  # dalpha/dx
         [0, 0, 0, 0, 1, 0, 0, 0, ],  # dbeta/dx
         [0, 0, 0, 0, 0, 1, 0, 0, ],  # dP0/dx
         [0, 0, 0, 0, 0, 0, 1, 0, ],  # ddeltax/dx
-        [0, 0, 0, 0, 0, 0, 0, 1, ],  # dxe/dx
+        [0, 0, 0, 0, 0, 0, 0, 0, ],  # dxe/dx
     ])
 
 
@@ -79,7 +79,7 @@ R = np.array([
 
 def analyze(data):
     kalman = KalmanState(f, F, h, H, R,
-                         np.array([[0, 0, 0, 0.3, 1, 1, 1, 0]]).T)
+                         np.array([[0, 0, 0, 0.3, 0.05, 100, 1, 0]]).T)
     rows = []
     lastT = 0
     for row in data:
