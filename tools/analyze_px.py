@@ -2,6 +2,8 @@
 
 # Copyright 2021 by Daniel Winkelman. All rights reserved.
 
+import kalman
+
 import argparse
 import datetime
 import os
@@ -38,8 +40,20 @@ VARIABLES = {
         "normalize": lambda array: array - array[0],
         "units": "Pressure units",
     },
+    "kalman_muP": {
+        "name": "Pressure (Kalman)",
+        "type": "Pressure",
+        "normalize": lambda array: array - array[0],
+        "units": "Pressure units",
+    },
     "xe": {
         "name": "Stepper Motor Position",
+        "type": "Displacement",
+        "normalize": lambda array: array - array[0],
+        "units": "E-Axis usteps",
+    },
+    "kalman_xe": {
+        "name": "Stepper Motor Position (Kalman)",
         "type": "Displacement",
         "normalize": lambda array: array - array[0],
         "units": "E-Axis usteps",
@@ -50,11 +64,41 @@ VARIABLES = {
         "normalize": lambda array: array - array[0],
         "units": "E-Axis usteps",
     },
+    "kalman_mux": {
+        "name": "Syringe Plunger Position (Kalman)",
+        "type": "Displacement",
+        "normalize": lambda array: array - array[0],
+        "units": "E-Axis usteps",
+    },
     "deltax": {
         "name": "Displacement Difference",
         "type": "Displacement",
         "normalize": lambda array: array - array[0],
         "units": "E-Axis usteps",
+    },
+    "kalman_alpha": {
+        "name": "Alpha Coefficient",
+        "type": "Coefficient",
+        "normalize": lambda array: array,
+        "units": "Dimensionless",
+    },
+    "kalman_beta": {
+        "name": "Beta Coefficient",
+        "type": "Coefficient",
+        "normalize": lambda array: array,
+        "units": "Dimensionless",
+    },
+    "kalman_deltax0": {
+        "name": "deltax0 Coefficient",
+        "type": "Coefficient",
+        "normalize": lambda array: array,
+        "units": "Dimensionless",
+    },
+    "kalman_P0": {
+        "name": "P0 Coefficient",
+        "type": "Coefficient",
+        "normalize": lambda array: array,
+        "units": "Dimensionless",
     },
 }
 
@@ -150,7 +194,7 @@ if __name__ == "__main__":
         components = name.split(".")[0].split("-")
         key = (components[2], components[0])
         data[key] = (key, normalize(key, array))
-    data[("t", "P")] = (("t", "P"), lowpassFilter(data[("t", "P")][1], 0.1))
+    data[("t", "P")] = (("t", "P"), lowpassFilter(data[("t", "P")][1], 0.01))
     plotSeries([data[("t", "xe")], data[("t", "xs")]],
                "{}/displacement.png".format(args.input_dir))
     plotSeries([data[("t", "P")]],
@@ -169,5 +213,29 @@ if __name__ == "__main__":
     data[("P", "dPdt")] = join(data[("t", "P")], data[("t", "dPdt")])
     plotSeries([data[("P", "dPdt")]],
                "{}/pressure_phase_space.png".format(args.input_dir))
-    allData = np.column_stack(
-        interp(*(i[1] for i in data.values() if i[0][0] == "t")))
+    data[("t", "ddeltaxdt")] = derivative(
+        (("t", "deltax"), lowpassFilter(data[("t", "deltax")][1], 0.1)))
+    plotSeries([data[("t", "ddeltaxdt")]],
+               "{}/delta_derivative.png".format(args.input_dir))
+
+    kalmanInput = np.column_stack(interp(data[("t", "xe")][1],
+                                         data[("t", "P")][1], data[("t", "xs")][1]))
+    kalmanOutput = kalman.analyze(kalmanInput)
+
+    for i, name in enumerate(["mux", "muxprime", "muP", "alpha", "beta", "P0", "deltax0", "xe"]):
+        key = ("t", "kalman_{}".format(name))
+        print(key)
+        data[key] = (key, np.column_stack(
+            (kalmanOutput[:, 0], kalmanOutput[:, i+4])))
+    plotSeries([data[("t", "xe")], data[("t", "xs")], data[("t", "kalman_xe")], data[("t", "kalman_mux")]],
+               "{}/kalman_displacement.png".format(args.input_dir))
+    plotSeries([data[("t", "P")], data[("t", "kalman_muP")]],
+               "{}/kalman_pressure.png".format(args.input_dir))
+    plotSeries([data[("t", "kalman_alpha")]],
+               "{}/kalman_alpha.png".format(args.input_dir))
+    plotSeries([data[("t", "kalman_beta")]],
+               "{}/kalman_beta.png".format(args.input_dir))
+    plotSeries([data[("t", "kalman_deltax0")]],
+               "{}/kalman_deltax0.png".format(args.input_dir))
+    plotSeries([data[("t", "kalman_P0")]],
+               "{}/kalman_P0.png".format(args.input_dir))

@@ -149,7 +149,8 @@ MoveE::MoveE(const Axes::XYZEPosition &startPosition,
 
 void MoveE::onStart(Context &context) {
   // Use constant feedrate
-  context.axes.getE().setFeedrate(Axes::EAxis::GcodeFeedrate(120.0f));
+  context.axes.getE().setFeedrate(
+      Axes::EAxis::GcodeFeedrate(*context.axes.getFeedrate() / 10));
   context.axes.getE().setTargetPosition(getEndPosition().e);
 }
 
