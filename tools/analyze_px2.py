@@ -44,7 +44,13 @@ AXIS_DESCRIPTIONS = {
         "name": "Syringe Plunger Position",
         "type": "Displacement",
         "units": "E-Axis usteps",
-        "quantities": ["xs", "mux_kalman"],
+        "quantities": ["xs", "mux_kalman", "muxs"],
+    },
+    "xn": {
+        "name": "Syringe Needle Position",
+        "type": "Displacement",
+        "units": "E-Axis usteps",
+        "quantities": ["xn", "muxn"],
     },
     "deltax": {
         "name": "Displacement Difference",
@@ -80,14 +86,20 @@ AXIS_DESCRIPTIONS = {
         "name": "Cylinder Area Coefficient",
         "type": "Ratio",
         "units": "Dimensionless",
-        "quantities": "AhAs",
+        "quantities": ["AhAs"],
     },
     "FfdAs": {
         "name": "Dynamic Friction Coefficient",
         "type": "Dynamic Friction",
         "units": "Pressure units",
-        "quantities": "FfdAs",
+        "quantities": ["FfdAs"],
     },
+    "rhoeta": {
+        "name": "Viscocity Coefficient",
+        "type": "Viscocity",
+        "units": "idk",
+        "quantities": ["rhoeta"],
+    }
 }
 
 
@@ -108,9 +120,9 @@ def chooseNameModifiers(quantity):
     if "error" in quantity:
         modifiers.append("Error")
     if len(modifiers) > 0:
-        return "{} ({})".format(name, ", ".join(modifiers))
+        return "{} ({}) [{}]".format(name, ", ".join(modifiers), quantity)
     else:
-        return name
+        return "{} [{}]".format(name, quantity)
 
 
 def interp(*arrays):
@@ -217,7 +229,7 @@ if __name__ == "__main__":
     kalmanInput = np.column_stack(interp(data[("t", "xe")],
                                          data[("t", "P")], data[("t", "xs")]))
     kalmanOutput = kalman.analyze(kalmanInput)
-    for i, name in enumerate(["mux", "muxprime", "muPh", "muPs", "alpha", "beta", "AhAs", "FfdAs", "xs0", "Ph0", "xe"]):
+    for i, name in enumerate(["muxe", "muxs", "muxn", "dmuxndt", "muPh", "muPs", "alphah", "alphas_recip", "rhoeta_recip", "AhAs", "FfdAs", "xs0", "Ph0"]):
         key = ("t", "{}_kalman".format(name))
         print(key)
         createSeries(key, np.column_stack(
@@ -225,7 +237,7 @@ if __name__ == "__main__":
 
     # Calculate measurements
     createSeries(("t", "xs_kalman"), binaryOperator(
-        data[("t", "mux_kalman")], data[("t", "xs0_kalman")], addition))
+        data[("t", "muxs_kalman")], data[("t", "xs0_kalman")], addition))
     createSeries(("t", "Ph_kalman"), binaryOperator(
         data[("t", "muPh_kalman")], data[("t", "Ph0_kalman")], lambda muPh, Ph0: muPh + 1000 * Ph0))
 
@@ -235,7 +247,7 @@ if __name__ == "__main__":
     createSeries(("t", "Ph_kalman_error"), binaryOperator(
         data[("t", "P")], data[("t", "Ph_kalman")], difference))
 
-    plotSeries([("t", "xe"), ("t", "xs"), ("t", "xs_kalman")],
+    plotSeries([("t", "xe"), ("t", "xs"), ("t", "xs_kalman"), ("t", "muxn_kalman")],
                args.input_dir, "kalman_displacement")
     plotSeries([("t", "P"), ("t", "Ph_kalman")],
                args.input_dir, "kalman_pressure")
@@ -245,8 +257,11 @@ if __name__ == "__main__":
                args.input_dir, "kalman_pressure_error")
     plotSeries([("t", "Ph0_kalman")],
                args.input_dir, "kalman_Ph0")
-    plotSeries([("t", "beta_kalman")], args.input_dir, "kalman_beta")
-    plotSeries([("t", "alpha_kalman")], args.input_dir, "kalman_alpha")
+    plotSeries([("t", "alphah_kalman")], args.input_dir, "kalman_alphah")
+    plotSeries([("t", "alphas_recip_kalman")],
+               args.input_dir, "kalmans_alphas_recip")
     plotSeries([("t", "AhAs_kalman")], args.input_dir, "kalman_AhAs")
     plotSeries([("t", "FfdAs_kalman")], args.input_dir, "kalman_FfdAs")
     plotSeries([("t", "muPs_kalman")], args.input_dir, "kalman_muPs")
+    plotSeries([("t", "rhoeta_recip_kalman")],
+               args.input_dir, "kalman_rhoeta_recip")

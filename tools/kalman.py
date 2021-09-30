@@ -4,14 +4,14 @@ import numpy as np
 
 
 class KalmanState:
-    def __init__(self, f, F, h, H, Rk, x0):
+    def __init__(self, f, F, h, H, Rk, x0, P0):
         self.f = f
         self.F = F
         self.h = h
         self.H = H
         self.Rk = Rk
         self.x = x0
-        self.P = np.eye(x0.size)
+        self.P = P0
 
     def evolve(self, uk, zk, deltat):
         xint = self.f(self.x, uk, deltat)
@@ -29,45 +29,75 @@ class KalmanState:
 
 
 def f(x, u, deltat):
-    (mux, muxprime, muP, alpha, beta, P0, deltax0, xe) = x.T[0]
+    (
+        muxe, muxs, muxn, dmuxndt,  # displacement state
+        muPh, muPs,  # pressure state
+        alphah, alphas_recip, rhoeta_recip, AhAs, FfdAs,  # control parameters
+        xs0, Ph0,  # adjustment parameters
+    ) = x.T[0]
     (xein,) = u.T[0]  # TODO: redefine
     return np.column_stack((np.array([
-        mux + deltat * muxprime,
-        beta * (xe - mux - deltax0),
-        P0 + alpha * (xe - mux - deltax0),
-        alpha,
-        beta,
-        P0,
-        deltax0,
-        xein,
+        xein,  # muxe (control input)
+        muxn + muPs * alphas_recip,  # muxs (pressure-displacement ratio)
+        muxn + deltat * dmuxndt,  # muxn (discrete-time integral)
+        muPs * rhoeta_recip,  # dmuxndt (Poiseuille's Law)
+        alphah * (muxe - muxs),  # muPh (pressure-displacement ratio)
+        AhAs * muPh - FfdAs,  # muPs (sum-of-forces)
+        alphah,
+        alphas_recip,
+        rhoeta_recip,
+        AhAs,
+        FfdAs,
+        xs0,
+        Ph0,
     ]),))
 
 
 def F(x, u, deltat):
-    (mux, muxprime, muP, alpha, beta, P0, deltax0, xe) = x.T[0]
+    (
+        muxe, muxs, muxn, dmuxndt,  # displacement state
+        muPh, muPs,  # pressure state
+        alphah, alphas_recip, rhoeta_recip, AhAs, FfdAs,  # control parameters
+        xs0, Ph0,  # adjustment parameters
+    ) = x.T[0]
     (xein,) = u.T[0]  # TODO: redefine
     return np.array([
-        [1, deltat, 0, 0, 0, 0, 0, 0, ],  # dmux/dx
-        [-beta, 0, 0, 0, xe - mux - deltax0, 0, -beta, beta, ],  # dmuxprime/dx
-        [-alpha, 0, 0, xe - mux - deltax0, 0, 1, -alpha, alpha, ],  # dP/dx
-        [0, 0, 0, 1, 0, 0, 0, 0, ],  # dalpha/dx
-        [0, 0, 0, 0, 1, 0, 0, 0, ],  # dbeta/dx
-        [0, 0, 0, 0, 0, 1, 0, 0, ],  # dP0/dx
-        [0, 0, 0, 0, 0, 0, 1, 0, ],  # ddeltax/dx
-        [0, 0, 0, 0, 0, 0, 0, 0, ],  # dxe/dx
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],  # muxe
+        [0, 0, 1, 0, 0, alphas_recip, 0, muPs, 0, 0, 0, 0, 0, ],  # muxs
+        [0, 0, 1, deltat, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],  # muxn
+        [0, 0, 0, 0, 0, rhoeta_recip, 0, 0, muPs, 0, 0, 0, 0, ],  # dmuxndt
+        [alphah, -alphah, 0, 0, 0, 0, muxe - muxs, 0, 0, 0, 0, 0, 0, ],  # muPh
+        [0, 0, 0, 0, AhAs, 0, 0, 0, 0, muPh, -1, 0, 0, ],  # muPs
+        [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, ],
+        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, ],
+        [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, ],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, ],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, ],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, ],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, ],
     ])
 
 
 def h(x):
-    (mux, muxprime, muP, alpha, beta, P0, deltax0, xe) = x.T[0]
-    return np.array([[muP + P0, mux + deltax0]]).T
+    (
+        muxe, muxs, muxn, dmuxndt,  # displacement state
+        muPh, muPs,  # pressure state
+        alphah, alphas_recip, rhoeta_recip, AhAs, FfdAs,  # control parameters
+        xs0, Ph0,  # adjustment parameters
+    ) = x.T[0]
+    return np.array([[muPh + Ph0 * 1000, muxs + xs0]]).T
 
 
 def H(x):
-    (mux, muxprime, muP, alpha, beta, P0, deltax0, xe) = x.T[0]
+    (
+        muxe, muxs, muxn, dmuxndt,  # displacement state
+        muPh, muPs,  # pressure state
+        alphah, alphas_recip, rhoeta_recip, AhAs, FfdAs,  # control parameters
+        xs0, Ph0,  # adjustment parameters
+    ) = x.T[0]
     return np.array([
-        [0, 0, 1, 0, 0, 1, 0, 0, ],  # dP/dx
-        [1, 0, 0, 0, 0, 0, 1, 0, ],  # dxs/dx
+        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1000, ],  # dP/dx
+        [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, ],  # dxs/dx
     ])
 
 
@@ -79,7 +109,18 @@ R = np.array([
 
 def analyze(data):
     kalman = KalmanState(f, F, h, H, R,
-                         np.array([[0, 0, 0, 0.3, 0.05, 100, 1, 0]]).T)
+                         np.array(
+                             [[
+                                 0, 0, 0, 0,  # displacement state
+                                 0, 0,  # pressure state
+                                 1, 1, 1, 2, 10,  # control parameters
+                                 0, 4,  # adjustment parameters
+                             ]]).T,
+                         np.diag([10, 10, 10, 10,  # displacement state
+                                 3, 3,  # pressure state
+                                 1, 1, 1, 2, 10,  # control parameters
+                                 1, 4,  # adjustment parameters
+                                  ]))
     rows = []
     lastT = 0
     for row in data:
