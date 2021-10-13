@@ -52,6 +52,12 @@ AXIS_DESCRIPTIONS = {
         "units": "E-Axis usteps",
         "quantities": ["xn", "muxn"],
     },
+    "feedrate": {
+        "name": "Feedrate",
+        "type": "Feedrate",
+        "units": "E-Axis usteps / sec",
+        "quantities": ["dxedt", "dxs_filtereddt"],
+    },
     "deltax": {
         "name": "Displacement Difference",
         "type": "Displacement",
@@ -147,12 +153,16 @@ def join(xpair, ypair):
 
 def lowpassFilter(name, a):
     array = data[name]
-    average = 0
-    output = array.copy()
-    for i in range(array.shape[0]):
-        average = average * (1 - a) + array[i][1] * a
-        output[i][1] = average
-    createSeries((name[0], "{}_filtered".format(name[1])), output)
+    kernelSize = int(1 / a)
+    createSeries(
+        (name[0], "{}_filtered".format(name[1])),
+        np.column_stack((
+            np.convolve(array[:, 0], np.ones(
+                kernelSize) / kernelSize)[:-kernelSize],
+            np.convolve(array[:, 1], np.ones(
+                kernelSize) / kernelSize)[:-kernelSize],
+        ))
+    )
 
 
 def unaryOperator(array, op):
@@ -162,6 +172,14 @@ def unaryOperator(array, op):
 def binaryOperator(array1, array2, op):
     ts, interp1, interp2 = interp(array1, array2)
     return np.column_stack((ts, op(interp1, interp2)))
+
+
+def derivative(name):
+    array = data[name]
+    createSeries(
+        (name[0], "d{}d{}".format(name[1], name[0])),
+        np.column_stack(((array[:-1, 0] + array[1:, 0]) / 2,
+                         (array[1:, 1] - array[:-1, 1]) / (array[1:, 0] - array[:-1, 0]))))
 
 
 def addition(x, y): return x + y
@@ -211,25 +229,37 @@ if __name__ == "__main__":
     # Normalize and Filter
     data[("t", "xe")] = unaryOperator(data[("t", "xe")], lambda x: x - x[0])
     data[("t", "xs")] = unaryOperator(data[("t", "xs")], lambda x: x - x[0])
-    #data[("t", "P")] = unaryOperator(data[("t", "P")], lambda x: x - x[0])
+    # data[("t", "P")] = unaryOperator(data[("t", "P")], lambda x: x - x[0])
     lowpassFilter(("t", "P"), 0.01)
 
     # Generate deltax and phase space
     createSeries(("t", "deltax"), binaryOperator(
         data[("t", "xe")], data[("t", "xs")], difference))
+    lowpassFilter(("t", "xs"), 0.02)
+    derivative(("t", "xe"))
+    derivative(("t", "xs_filtered"))
     join(("t", "P"), ("t", "deltax"))
+    join(("t", "P"), ("t", "dxs_filtereddt"))
+    join(("t", "deltax"), ("t", "dxs_filtereddt"))
 
     # Create plots of original data
     plotSeries([("t", "xe"), ("t", "xs")], args.input_dir, "displacement")
     plotSeries([("t", "P")], args.input_dir, "pressure")
     plotSeries([("t", "deltax")], args.input_dir, "deltax")
-    plotSeries([("P", "deltax")], args.input_dir, "phase_space")
+    plotSeries([("P", "deltax")], args.input_dir,
+               "phase_space_pressure_deltax")
+    plotSeries([("t", "dxedt"), ("t", "dxs_filtereddt")],
+               args.input_dir, "feedrate")
+    plotSeries([("P", "dxs_filtereddt")],
+               args.input_dir, "phase_space_pressure_feedrate")
+    plotSeries([("deltax", "dxs_filtereddt")],
+               args.input_dir, "phase_space_deltax_feedrate")
 
     # Perform Kalman analysis
     kalmanInput = np.column_stack(interp(data[("t", "xe")],
                                          data[("t", "P")], data[("t", "xs")]))
     kalmanOutput = kalman.analyze(kalmanInput)
-    for i, name in enumerate(["muxe", "muxs", "muxn", "dmuxndt", "muPh", "muPs", "alphah", "alphas_recip", "rhoeta_recip", "AhAs", "FfdAs", "xs0", "Ph0"]):
+    for i, name in enumerate(["muxe", "muxs", "muxn", "dmuxndt", "muPh", "muPs", "alphah", "alphas", "rhoeta", "AhAs", "FfdAs", "xs0", "Ph0"]):
         key = ("t", "{}_kalman".format(name))
         print(key)
         createSeries(key, np.column_stack(
@@ -255,13 +285,10 @@ if __name__ == "__main__":
                args.input_dir, "kalman_displacement_error")
     plotSeries([("t", "Ph_kalman_error")],
                args.input_dir, "kalman_pressure_error")
-    plotSeries([("t", "Ph0_kalman")],
-               args.input_dir, "kalman_Ph0")
+    plotSeries([("t", "Ph0_kalman")], args.input_dir, "kalman_Ph0")
     plotSeries([("t", "alphah_kalman")], args.input_dir, "kalman_alphah")
-    plotSeries([("t", "alphas_recip_kalman")],
-               args.input_dir, "kalmans_alphas_recip")
+    plotSeries([("t", "alphas_kalman")], args.input_dir, "kalman_alphas")
     plotSeries([("t", "AhAs_kalman")], args.input_dir, "kalman_AhAs")
     plotSeries([("t", "FfdAs_kalman")], args.input_dir, "kalman_FfdAs")
     plotSeries([("t", "muPs_kalman")], args.input_dir, "kalman_muPs")
-    plotSeries([("t", "rhoeta_recip_kalman")],
-               args.input_dir, "kalman_rhoeta_recip")
+    plotSeries([("t", "rhoeta_kalman")], args.input_dir, "kalman_rhoeta")

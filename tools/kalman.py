@@ -17,7 +17,8 @@ class KalmanState:
         xint = self.f(self.x, uk, deltat)
         Fk = self.F(self.x, uk, deltat)
         Hk = self.H(xint)
-        Pint = Fk @ self.P @ Fk.T
+        Pint = Fk @ self.P @ Fk.T + \
+            np.diag([0, 0, 0, 0, 0, 0, 0, 0, 0.01, 0, 1, 10, 3])
         yk = zk - self.h(xint)
         Sk = Hk @ Pint @ Hk.T + self.Rk
         Kk = Pint @ Hk.T @ np.linalg.inv(Sk)
@@ -32,20 +33,20 @@ def f(x, u, deltat):
     (
         muxe, muxs, muxn, dmuxndt,  # displacement state
         muPh, muPs,  # pressure state
-        alphah, alphas_recip, rhoeta_recip, AhAs, FfdAs,  # control parameters
+        alphah, alphas, rhoeta, AhAs, FfdAs,  # control parameters
         xs0, Ph0,  # adjustment parameters
     ) = x.T[0]
     (xein,) = u.T[0]  # TODO: redefine
     return np.column_stack((np.array([
         xein,  # muxe (control input)
-        muxn + muPs * alphas_recip,  # muxs (pressure-displacement ratio)
+        muxn + muPs / alphas,  # muxs (pressure-displacement ratio)
         muxn + deltat * dmuxndt,  # muxn (discrete-time integral)
-        muPs * rhoeta_recip,  # dmuxndt (Poiseuille's Law)
+        muPs / rhoeta,  # dmuxndt (Poiseuille's Law)
         alphah * (muxe - muxs),  # muPh (pressure-displacement ratio)
         AhAs * muPh - FfdAs,  # muPs (sum-of-forces)
         alphah,
-        alphas_recip,
-        rhoeta_recip,
+        alphas,
+        rhoeta,
         AhAs,
         FfdAs,
         xs0,
@@ -57,15 +58,16 @@ def F(x, u, deltat):
     (
         muxe, muxs, muxn, dmuxndt,  # displacement state
         muPh, muPs,  # pressure state
-        alphah, alphas_recip, rhoeta_recip, AhAs, FfdAs,  # control parameters
+        alphah, alphas, rhoeta, AhAs, FfdAs,  # control parameters
         xs0, Ph0,  # adjustment parameters
     ) = x.T[0]
     (xein,) = u.T[0]  # TODO: redefine
     return np.array([
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],  # muxe
-        [0, 0, 1, 0, 0, alphas_recip, 0, muPs, 0, 0, 0, 0, 0, ],  # muxs
+        [0, 0, 1, 0, 0, 1 / alphas, 0, -muPs / alphas**2, 0, 0, 0, 0, 0, ],  # muxs
         [0, 0, 1, deltat, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],  # muxn
-        [0, 0, 0, 0, 0, rhoeta_recip, 0, 0, muPs, 0, 0, 0, 0, ],  # dmuxndt
+        [0, 0, 0, 0, 0, 1 / rhoeta, 0, 0, -muPs / \
+            rhoeta**2, 0, 0, 0, 0, ],  # dmuxndt
         [alphah, -alphah, 0, 0, 0, 0, muxe - muxs, 0, 0, 0, 0, 0, 0, ],  # muPh
         [0, 0, 0, 0, AhAs, 0, 0, 0, 0, muPh, -1, 0, 0, ],  # muPs
         [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, ],
@@ -82,7 +84,7 @@ def h(x):
     (
         muxe, muxs, muxn, dmuxndt,  # displacement state
         muPh, muPs,  # pressure state
-        alphah, alphas_recip, rhoeta_recip, AhAs, FfdAs,  # control parameters
+        alphah, alphas, rhoeta, AhAs, FfdAs,  # control parameters
         xs0, Ph0,  # adjustment parameters
     ) = x.T[0]
     return np.array([[muPh + Ph0 * 1000, muxs + xs0]]).T
@@ -92,7 +94,7 @@ def H(x):
     (
         muxe, muxs, muxn, dmuxndt,  # displacement state
         muPh, muPs,  # pressure state
-        alphah, alphas_recip, rhoeta_recip, AhAs, FfdAs,  # control parameters
+        alphah, alphas, rhoeta, AhAs, FfdAs,  # control parameters
         xs0, Ph0,  # adjustment parameters
     ) = x.T[0]
     return np.array([
@@ -113,12 +115,13 @@ def analyze(data):
                              [[
                                  0, 0, 0, 0,  # displacement state
                                  0, 0,  # pressure state
-                                 1, 1, 1, 2, 10,  # control parameters
+                                 # control parameters
+                                 3.4, 1.7, 20, 0.5, 0,
                                  0, 4,  # adjustment parameters
                              ]]).T,
-                         np.diag([10, 10, 10, 10,  # displacement state
+                         np.diag([0, 10, 10, 10,  # displacement state
                                  3, 3,  # pressure state
-                                 1, 1, 1, 2, 10,  # control parameters
+                                 0.1, 0.1, 0.1, 0, 1,  # control parameters
                                  1, 4,  # adjustment parameters
                                   ]))
     rows = []
