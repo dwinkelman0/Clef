@@ -7,6 +7,8 @@
 namespace Clef::Impl::Emulator {
 class LimitSwitch : public Clef::If::LimitSwitch {
  public:
+  LimitSwitch() : state_(false) {}
+
   bool init() override { return true; }
 
   bool getInputState() const override { return state_; }

@@ -3,6 +3,7 @@
 #include "Serial.h"
 
 #include <mutex>
+#include <sstream>
 
 namespace Clef::Impl::Emulator {
 Serial::Serial(std::shared_ptr<std::mutex> globalMutex)
@@ -42,6 +43,13 @@ void Serial::writeStr(const char *str) {
 void Serial::writeLine(const char *line) {
   writeStr(line);
   writeChar('\n');
+}
+
+void Serial::writeUint64(const uint64_t x) {
+  std::unique_lock<std::mutex> lock(*globalMutex_);
+  std::stringstream ss;
+  ss << x;
+  writeStr(ss.str().c_str());
 }
 
 void Serial::inject(const std::string &str) {

@@ -15,11 +15,13 @@ IntegrationFixture::IntegrationFixture()
       eAxisTimer_(),
       displacementSensorInput_(),
       displacementSensor_(clock_, 0.1),
+      pressureSensor_(clock_, 0.02),
+      extrusionPredictor_(),
       xAxis_(Clef::Impl::Emulator::xAxisStepper, xAxisTimer_),
       yAxis_(Clef::Impl::Emulator::yAxisStepper, yAxisTimer_),
       zAxis_(Clef::Impl::Emulator::zAxisStepper, zAxisTimer_),
       eAxis_(Clef::Impl::Emulator::eAxisStepper, eAxisTimer_,
-             displacementSensor_),
+             displacementSensor_, pressureSensor_, extrusionPredictor_),
       axes_(xAxis_, yAxis_, zAxis_, eAxis_),
       context_({axes_, parser_, clock_, serial_, actionQueue_}) {
   clock_.init();

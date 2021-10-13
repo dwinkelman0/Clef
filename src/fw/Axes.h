@@ -3,6 +3,7 @@
 #pragma once
 
 #include <fw/Config.h>
+#include <fw/ExtrusionPredictor.h>
 #include <fw/Sensor.h>
 #include <if/Interrupts.h>
 #include <if/PwmTimer.h>
@@ -27,6 +28,18 @@ class Axis : public Clef::Util::Initialized {
 
   Axis(Clef::If::Stepper<USTEPS_PER_MM> &stepper, Clef::If::PwmTimer &pwmTimer)
       : stepper_(stepper), pwmTimer_(pwmTimer) {}
+
+  static StepperPosition gcodePositionToStepper(const GcodePosition pos) {
+    return StepperPosition(
+        *Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
+                              USTEPS_PER_MM>(pos));
+  }
+
+  static GcodePosition stepperPositionToGcode(const StepperPosition pos) {
+    return GcodePosition(
+        Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
+                             USTEPS_PER_MM>(*pos));
+  }
 
   bool init() override {
     stepper_.init();
@@ -57,6 +70,11 @@ class Axis : public Clef::Util::Initialized {
   }
 
   StepperPosition getPosition() const { return stepper_.getPosition(); }
+  GcodePosition getGcodePosition() const {
+    StepperPosition pos = stepper_.getPosition();
+    return GcodePosition(Position<float, Clef::Util::PositionUnit::USTEP>(
+        static_cast<float>(*pos)));
+  }
 
   bool isAtTargetPosition() const { return stepper_.isAtTargetPosition(); }
 
@@ -110,8 +128,54 @@ class Axis : public Clef::Util::Initialized {
     }
   }
 
+ protected:
   Clef::If::Stepper<USTEPS_PER_MM> &stepper_;
   Clef::If::PwmTimer &pwmTimer_;
+};
+
+struct XYEPosition {
+  using XAxis = Axis<USTEPS_PER_MM_X>;
+  using YAxis = Axis<USTEPS_PER_MM_Y>;
+  using EAxis = Axis<USTEPS_PER_MM_E>;
+  using XPosition = XAxis::GcodePosition;
+  using YPosition = YAxis::GcodePosition;
+  using EPosition = EAxis::GcodePosition;
+
+  XPosition x = 0;
+  YPosition y = 0;
+  EPosition e = 0;
+
+  bool operator==(const XYEPosition &other) const;
+  bool operator!=(const XYEPosition &other) const;
+  XYEPosition operator-(const XYEPosition &other) const {
+    return {x - other.x, y - other.y, e - other.e};
+  }
+  float getXyMagnitude() const { return sqrt(*x * *x + *y * *y); }
+};
+
+struct XYZEPosition {
+  using XAxis = Axis<USTEPS_PER_MM_X>;
+  using YAxis = Axis<USTEPS_PER_MM_Y>;
+  using ZAxis = Axis<USTEPS_PER_MM_Z>;
+  using EAxis = Axis<USTEPS_PER_MM_E>;
+  using XPosition = XAxis::GcodePosition;
+  using YPosition = YAxis::GcodePosition;
+  using ZPosition = ZAxis::GcodePosition;
+  using EPosition = EAxis::GcodePosition;
+
+  XPosition x = 0;
+  YPosition y = 0;
+  ZPosition z = 0;
+  EPosition e = 0;
+
+  XYEPosition asXyePosition() const;
+
+  bool operator==(const XYZEPosition &other) const;
+  bool operator!=(const XYZEPosition &other) const;
+  XYZEPosition operator-(const XYZEPosition &other) const {
+    return {x - other.x, y - other.y, z - other.z, e - other.e};
+  }
+  float getXyMagnitude() const { return sqrt(*x * *x + *y * *y); }
 };
 
 template <uint32_t SENSOR_USTEPS_PER_MM, uint32_t USTEPS_PER_MM>
@@ -120,23 +184,95 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
   ExtrusionAxis(Clef::If::Stepper<USTEPS_PER_MM> &stepper,
                 Clef::If::PwmTimer &pwmTimer,
                 Clef::Fw::DisplacementSensor<SENSOR_USTEPS_PER_MM,
-                                             USTEPS_PER_MM> &displacementSensor)
+                                             USTEPS_PER_MM> &displacementSensor,
+                Clef::Fw::PressureSensor &pressureSensor,
+                Clef::Fw::ExtrusionPredictor &predictor)
       : Axis<USTEPS_PER_MM>(stepper, pwmTimer),
-        displacementSensor_(displacementSensor) {}
+        displacementSensor_(displacementSensor),
+        pressureSensor_(pressureSensor),
+        predictor_(predictor),
+        displacementSensorOffset_(0.0f) {}
 
   /**
-   * If there is new sensor data, handle feedrate throttling.
+   * Set the amount by which the displacement sensor and axis differ. This
+   * should be done during global firmware initialization and homing.
    */
-  void throttle() {
+  void setDisplacementSensorOffset(
+      const typename Axis<USTEPS_PER_MM>::StepperPosition offset) {
+    displacementSensorOffset_ = offset;
+  }
+
+  /**
+   * If there is new sensor data, handle feedrate throttling. Returns the
+   * feedrate at which the XY axes should operate.
+   */
+  float throttle(const XYEPosition &startPosition,
+                 const XYEPosition &endPosition,
+                 const XYEPosition &currentPosition) {
+    float xyFeedrate = 0.0f;
     if (displacementSensor_.checkOut()) {
-      // TODO: actual logic
+      if (pressureSensor_.checkOut()) {
+        float t = *pressureSensor_.getMeasurementTime();
+        float xe = *this->stepper_.getPosition();
+        float xs = *displacementSensor_.readPosition();
+        float dxsdt = *displacementSensor_.readFeedrate();
+        float P = pressureSensor_.readPressure();
+        predictor_.evolve(t, xe, xs, dxsdt, P);
+
+        this->setTargetPosition(predictor_.determineExtruderTargetPosition());
+        this->setFeedrate(predictor_.determineExtruderFeedrate());
+        xyFeedrate = predictor_.determineXYFeedrate(
+            *XYEPosition::XAxis::gcodePositionToStepper(startPosition.x),
+            *XYEPosition::YAxis::gcodePositionToStepper(startPosition.y),
+            *XYEPosition::EAxis::gcodePositionToStepper(startPosition.e),
+            *XYEPosition::XAxis::gcodePositionToStepper(endPosition.x),
+            *XYEPosition::YAxis::gcodePositionToStepper(endPosition.y),
+            *XYEPosition::EAxis::gcodePositionToStepper(endPosition.e),
+            *XYEPosition::XAxis::gcodePositionToStepper(currentPosition.x),
+            *XYEPosition::YAxis::gcodePositionToStepper(currentPosition.y));
+
+        pressureSensor_.release();
+      }
       displacementSensor_.release();
     }
+    return xyFeedrate;
+  }
+
+  void beginExtrusion() {
+    typename Axis<USTEPS_PER_MM>::StepperPosition stepperPosition =
+        *this->stepper_.getPosition();
+    predictor_.reset(*stepperPosition,
+                     *(stepperPosition + displacementSensorOffset_));
+  }
+
+  /**
+   * Check whether the correct amount of material has been extruded. This method
+   * is intended for XYE extrusions.
+   */
+  bool isExtrusionDone() const { return predictor_.isBeyondEndpoint(); };
+
+  /**
+   * Set the amount of material that should be extruded. This method is intended
+   * for XYE extrusions.
+   */
+  void setExtrusionEndpoint(
+      const typename Axis<USTEPS_PER_MM>::GcodePosition position) {
+    predictor_.setEndpoint(*this->gcodePositionToStepper(position));
+  }
+
+  typename Axis<USTEPS_PER_MM>::GcodePosition getExtrusionEndpoint() const {
+    return this->stepperPositionToGcode(predictor_.getEndpoint());
   }
 
  private:
   Clef::Fw::DisplacementSensor<SENSOR_USTEPS_PER_MM, USTEPS_PER_MM>
       &displacementSensor_;
+  Clef::Fw::PressureSensor &pressureSensor_;
+  Clef::Fw::ExtrusionPredictor &predictor_;
+
+  typename Axis<USTEPS_PER_MM>::StepperPosition
+      displacementSensorOffset_; /*!< Subtract this quantity from xs to get the
+                                    corresponding value of xe. */
 };
 
 class Axes : public Clef::Util::Initialized {
@@ -145,42 +281,6 @@ class Axes : public Clef::Util::Initialized {
   using YAxis = Axis<USTEPS_PER_MM_Y>;
   using ZAxis = Axis<USTEPS_PER_MM_Z>;
   using EAxis = ExtrusionAxis<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>;
-
-  struct XYEPosition {
-    using XPosition = XAxis::GcodePosition;
-    using YPosition = YAxis::GcodePosition;
-    using EPosition = EAxis::GcodePosition;
-    XPosition x = 0;
-    YPosition y = 0;
-    EPosition e = 0;
-
-    bool operator==(const XYEPosition &other) const;
-    bool operator!=(const XYEPosition &other) const;
-    XYEPosition operator-(const XYEPosition &other) const {
-      return {x - other.x, y - other.y, e - other.e};
-    }
-    float getXyMagnitude() const { return sqrt(*x * *x + *y * *y); }
-  };
-
-  struct XYZEPosition {
-    using XPosition = XAxis::GcodePosition;
-    using YPosition = YAxis::GcodePosition;
-    using ZPosition = ZAxis::GcodePosition;
-    using EPosition = EAxis::GcodePosition;
-    XPosition x = 0;
-    YPosition y = 0;
-    ZPosition z = 0;
-    EPosition e = 0;
-
-    XYEPosition asXyePosition() const;
-
-    bool operator==(const XYZEPosition &other) const;
-    bool operator!=(const XYZEPosition &other) const;
-    XYZEPosition operator-(const XYZEPosition &other) const {
-      return {x - other.x, y - other.y, z - other.z, e - other.e};
-    }
-    float getXyMagnitude() const { return sqrt(*x * *x + *y * *y); }
-  };
 
   static const XYEPosition originXye;
   static const XYZEPosition originXyze;
@@ -219,6 +319,11 @@ class Axes : public Clef::Util::Initialized {
     getY().setFeedrate(feedrateMmsPerMin * fabs(*difference.y / magnitude));
     getX().setTargetPosition(endPosition.x);
     getY().setTargetPosition(endPosition.y);
+  }
+
+  XYZEPosition getCurrentPosition() const {
+    return {getX().getGcodePosition(), getY().getGcodePosition(),
+            getZ().getGcodePosition(), getE().getGcodePosition()};
   }
 
  private:

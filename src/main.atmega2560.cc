@@ -19,6 +19,7 @@ Clef::Fw::PressureSensor pressureSensor(clock, 1);
 Clef::Fw::ActionQueue actionQueue;
 Clef::Fw::XYEPositionQueue xyePositionQueue;
 Clef::Fw::GcodeParser gcodeParser;
+Clef::Fw::LinearExtrusionPredictor extrusionPredictor;
 Clef::Fw::Axes::XAxis xAxis(Clef::Impl::Atmega2560::xAxisStepper,
                             Clef::Impl::Atmega2560::xAxisTimer);
 Clef::Fw::Axes::YAxis yAxis(Clef::Impl::Atmega2560::yAxisStepper,
@@ -27,7 +28,8 @@ Clef::Fw::Axes::ZAxis zAxis(Clef::Impl::Atmega2560::zAxisStepper,
                             Clef::Impl::Atmega2560::zeAxisTimer);
 Clef::Fw::Axes::EAxis eAxis(Clef::Impl::Atmega2560::eAxisStepper,
                             Clef::Impl::Atmega2560::zeAxisTimer,
-                            displacementSensor);
+                            displacementSensor, pressureSensor,
+                            extrusionPredictor);
 Clef::Fw::Axes axes(xAxis, yAxis, zAxis, eAxis);
 Clef::Fw::Context context({axes, gcodeParser, clock,
                            Clef::Impl::Atmega2560::serial, actionQueue});
