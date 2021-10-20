@@ -150,15 +150,15 @@ TEST_F(GcodeParserTest, G1_XYE) {
   ASSERT_FLOAT_EQ(*xyePosition2.e, 2.00002);
 
   // Send a non-XYE point
-  serial_.inject("G1 X0 Y0\n");
+  serial_.inject("G1 X33 Y44\n");
   parser_.ingest(context_);
   ASSERT_EQ(serial_.extract(), "ok\n");
   ASSERT_EQ(actionQueue_.size(), 2);
   it = actionQueue_.last();
   ASSERT_EQ((*it)->getType(), Action::Type::MOVE_XY);
   endPosition = (*it)->getEndPosition();
-  ASSERT_EQ(*endPosition.x, 0);
-  ASSERT_EQ(*endPosition.y, 0);
+  ASSERT_EQ(*endPosition.x, 33);
+  ASSERT_EQ(*endPosition.y, 44);
   ASSERT_FLOAT_EQ(*endPosition.e, 2.00002);
   ASSERT_EQ(context_.xyePositionQueue.size(), 2);
 
@@ -182,8 +182,14 @@ TEST_F(GcodeParserTest, G1_XYE) {
 
   // Clean up
   actionQueue_.pop(context_);
+  ASSERT_EQ(*actionQueue_.getStartPosition().x, 80);
+  ASSERT_EQ(*actionQueue_.getStartPosition().y, 60);
   actionQueue_.pop(context_);
+  ASSERT_EQ(*actionQueue_.getStartPosition().x, 33);
+  ASSERT_EQ(*actionQueue_.getStartPosition().y, 44);
   actionQueue_.pop(context_);
+  ASSERT_EQ(*actionQueue_.getStartPosition().x, 30);
+  ASSERT_EQ(*actionQueue_.getStartPosition().y, 30);
   context_.xyePositionQueue.pop();
   context_.xyePositionQueue.pop();
   context_.xyePositionQueue.pop();

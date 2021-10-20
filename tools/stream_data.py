@@ -41,8 +41,14 @@ def collect(dirname, port, baud, runtime):
     try:
         while (runtime > 0 and time.time() < (t0 + runtime)) or runtime == 0:
             message = ser.readline().decode("utf-8").rstrip()
-            if VALID_LINE_RE.match(message) is None:
+            if message == ";power_on":
+                print("Detected \";power_on\"")
+                data = {}
                 continue
+            if VALID_LINE_RE.match(message) is None:
+                if message[0] == ";":
+                    print("Comment: {}".format(message))
+                    continue
             datapoints = DATAPOINT_RE.findall(message)
             if parseDatapoint(datapoints[0])[0] != "t":
                 continue
@@ -56,8 +62,8 @@ def collect(dirname, port, baud, runtime):
                     data[name] = []
                 array = data[name]
                 array.append((t, value))
-            if count % 500 == 0:
-                print("Collected {} samples".format(count))
+                if count % 100 == 0:
+                    print("Collected {} samples".format(count))
     except KeyboardInterrupt:
         print()
 

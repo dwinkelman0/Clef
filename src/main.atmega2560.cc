@@ -64,30 +64,28 @@ void extruderStatus(void *arg) {
 
 void checkSensors() {
   if (displacementSensor.checkOut()) {
-    Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
-                         USTEPS_PER_MM_E>
-        position = displacementSensor.readPosition();
-    Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time =
-        displacementSensor.getMeasurementTime();
-    char buffer[64];
-    Clef::If::EnableInterrupts interrupts;
-    sprintf(buffer, ",xs=%ld", static_cast<uint32_t>(*position));
-    Clef::Impl::Atmega2560::serial1.writeStr(";t=");
-    Clef::Impl::Atmega2560::serial1.writeUint64(*time);
-    Clef::Impl::Atmega2560::serial1.writeLine(buffer);
+    if (pressureSensor.checkOut()) {
+      typename Clef::Fw::Axes::EAxis::StepperPosition extruderPosition =
+          axes.getE().getPosition();
+      Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
+                           USTEPS_PER_MM_E>
+          sensorPosition = displacementSensor.readPosition();
+      float pressure = pressureSensor.readPressure();
+      Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time =
+          displacementSensor.getMeasurementTime();
+      char buffer[64];
+      Clef::If::EnableInterrupts interrupts;
+      Clef::Impl::Atmega2560::serial1.writeStr(";t=");
+      Clef::Impl::Atmega2560::serial1.writeUint64(*time);
+      sprintf(buffer, ",xe=%ld", static_cast<uint32_t>(*extruderPosition));
+      Clef::Impl::Atmega2560::serial1.writeStr(buffer);
+      sprintf(buffer, ",xs=%ld", static_cast<uint32_t>(*sensorPosition));
+      Clef::Impl::Atmega2560::serial1.writeStr(buffer);
+      sprintf(buffer, ",P=%ld", static_cast<int32_t>(pressure));
+      Clef::Impl::Atmega2560::serial1.writeLine(buffer);
+      pressureSensor.release();
+    }
     displacementSensor.release();
-  }
-  if (pressureSensor.checkOut()) {
-    float pressure = pressureSensor.readPressure();
-    Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time =
-        pressureSensor.getMeasurementTime();
-    char buffer[64];
-    Clef::If::EnableInterrupts interrupts;
-    sprintf(buffer, ",P=%ld", static_cast<int32_t>(pressure));
-    Clef::Impl::Atmega2560::serial1.writeStr(";t=");
-    Clef::Impl::Atmega2560::serial1.writeUint64(*time);
-    Clef::Impl::Atmega2560::serial1.writeLine(buffer);
-    pressureSensor.release();
   }
 }
 
@@ -105,7 +103,9 @@ int main() {
   Clef::Impl::Atmega2560::serial1.init();
   if (clock.init()) {
     Clef::Impl::Atmega2560::serial.writeLine(";;;;;;;;");
+    Clef::Impl::Atmega2560::serial1.writeLine(";;;;;;;;");
   }
+  Clef::Impl::Atmega2560::serial1.writeLine(";power_on");
   axes.init();
 
   Clef::Impl::Atmega2560::limitSwitches.init();
@@ -132,7 +132,6 @@ int main() {
 
   Clef::Impl::Atmega2560::timer1.init();
   Clef::Impl::Atmega2560::timer1.setFrequency(100.0f);
-  Clef::Impl::Atmega2560::timer1.setRisingEdgeCallback(extruderStatus, nullptr);
   Clef::Impl::Atmega2560::timer1.setFallingEdgeCallback(startSpiRead, nullptr);
   Clef::Impl::Atmega2560::timer1.enable();
 

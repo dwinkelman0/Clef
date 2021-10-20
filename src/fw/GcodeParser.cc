@@ -70,6 +70,7 @@ void GcodeParser::ingest(Context &context) {
 
 void GcodeParser::reset() {
   head_ = buffer_;
+  *head_ = '\0';
   commentMode_ = false;
   memset(buckets_, 0, sizeof(buckets_));
   memset(buffer_, 0, sizeof(buffer_));
@@ -244,12 +245,14 @@ bool GcodeParser::handleG1(Context &context, const uint16_t errorBufferSize,
         }
       }
     } else {
+      context.serial.writeLine(";Push XY");
       context.actionQueue.push(
           context,
           Action::MoveXY(context.actionQueue.getEndPosition(),
                          hasX ? &xMms : nullptr, hasY ? &yMms : nullptr));
     }
   } else if (hasE) {
+    context.serial.writeLine(";Push E");
     context.actionQueue.push(
         context, Action::MoveE(context.actionQueue.getEndPosition(), e));
   }

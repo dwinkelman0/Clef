@@ -18,13 +18,16 @@ def printFromFile(fname, port, baud):
     ser = serial.Serial(port, baud, timeout=1)
     time.sleep(2)
     with open(fname, "r") as inputFile:
+        isFirstLine = True
         for line in inputFile:
             print("> {}:".format(line[:-1]).ljust(60, "."), end="")
             success = False
             timeout = 0.001
-            isFirstLine = True
+            resend = True
             while not success:
-                ser.write(line.encode('utf-8'))
+                if resend:
+                    ser.write(line.encode('utf-8'))
+                resend = False
                 time.sleep(0.001)
                 message = ""
                 while message == "":
@@ -39,6 +42,7 @@ def printFromFile(fname, port, baud):
                     timeout = min(timeout, 0.1)
                     print(message)
                     print("".ljust(60, " "), end="")
+                    resend = True
                 elif message[0] == ";":
                     print(message)
                     print("".ljust(60, " "), end="")
