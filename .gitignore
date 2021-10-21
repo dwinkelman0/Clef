@@ -9,3 +9,6 @@
 !.gitignore
 
 build-*
+**/data-*
+**/kalman-*
+**/gcode
