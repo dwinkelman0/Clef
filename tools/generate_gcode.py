@@ -20,6 +20,12 @@ extrude_parser.add_argument("--max-feedrate", type=float, default=200)
 extrude_parser.add_argument("--num-segments", type=int, default=10)
 extrude_parser.add_argument("--num-iterations", type=int, default=1)
 
+impulse_parser = subparsers.add_parser("impulse")
+impulse_parser.add_argument("--distance", type=float, default=10)
+impulse_parser.add_argument("--feedrate", type=float, default=200)
+impulse_parser.add_argument("--duty-cycle", type=float, default=0.5)
+impulse_parser.add_argument("--num-iterations", type=int, default=1)
+
 
 def generateExtrude(args):
     output = []
@@ -36,10 +42,27 @@ def generateExtrude(args):
     return output
 
 
+def generateImpulse(args):
+    output = []
+    impulseTime = args.distance * 60 / args.feedrate
+    delayTime = impulseTime / args.duty_cycle * (1 - args.duty_cycle)
+    delayFeedrate = 10 / delayTime * 6
+    total = 0
+    currentX = 0
+    for i in range(args.num_iterations):
+        total += args.distance
+        output.append("G1 E{:.3f} F{:.3f}".format(total, args.feedrate))
+        currentX = 0 if currentX == 10 else 10
+        output.append("G1 X{:.3f} F{:.3f}".format(currentX, delayFeedrate))
+    return output
+
+
 if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
     if args.command == "extrude":
         output = generateExtrude(args)
+    elif args.command == "impulse":
+        output = generateImpulse(args)
 
     fname = os.path.abspath(args.output)
     dirname = os.path.dirname(fname)
