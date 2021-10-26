@@ -11,7 +11,7 @@ import numpy as np
 import utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model", type=str, default=None)
+parser.add_argument("--model", type=str, required=True)
 parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
 parser.add_argument("--output-dir", type=str, default=None)
 
@@ -141,7 +141,7 @@ class Power(Expression):
                 raise Exception()
 
     def __repr__(self):
-        return "pow({}, {})".format(repr(self.base), repr(self.power))
+        return "-pow(-{0}, {1}) if {0} < 0 else pow({0}, {1})".format(repr(self.base), repr(self.power))
 
 
 class Conditional(Expression):
@@ -183,12 +183,16 @@ class Constant(Expression):
 
 
 class ProcessVariable(Expression):
-    def __init__(self, symbol, initialValue, initialCovariance, noise, units):
+    def __init__(self, symbol, initialValue, initialCovariance, noise, units, updateWeight=1):
         self.symbol = symbol
         self.initialValue = initialValue
         self.initialCovariance = initialCovariance
         self.noise = noise
         self.units = units
+        if updateWeight > 1:
+            print(
+                "Warning: process variable {} has an update weight greater than 1, setting to 1".format(symbol))
+        self.updateWeight = updateWeight
 
     def isZero(self):
         return False
@@ -284,13 +288,13 @@ class KalmanFilterGenerator:
                 "# Packing Function",
                 "def packingFunc(data):",
                 "\t" +
-                "uk, zk, deltat = [None] * {}, [None] * {}, 0".format(
+                "uk, zk, deltat = [None] * {}, [None] * {}, None".format(
                     len(self.uvars), len(self.zvars)),
                 "\t" + "for key, value in data.items():",
                 "\t\t" + generateUnpackingConditionals(self.uvars, "uk"),
                 "\t\t" + generateUnpackingConditionals(self.zvars, "zk"),
                 "\t\t" +
-                "if key == \"{}\": deltat = value".format(
+                "if key.symbol == \"{}\": deltat = value".format(
                     self.deltat.symbol),
                 "\t" + "if all((item is not None for item in uk)) and \\",
                 "\t\t\t" + "all((item is not None for item in zk)) and \\",
@@ -373,6 +377,14 @@ class KalmanFilterGenerator:
                     self.zvars),
                 "])",
             ]),
+            "\n".join([
+                "# Update Weights",
+                "Wx = np.diag([",
+                "\t\t" + generateExpressions(
+                    [var.updateWeight for var in self.xvars],
+                    self.xvars),
+                "])",
+            ]),
         ])
 
         # Dump source to file
@@ -387,11 +399,11 @@ class KalmanFilterGenerator:
 
         # Interpret source into active memory
         exec(source, globals())
-        return packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R
+        return packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx
 
 
 class KalmanFilterState:
-    def __init__(self, packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R):
+    def __init__(self, packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx):
         self.packingFunc = packingFunc
         self.f = f
         self.dfdx = dfdx
@@ -401,6 +413,7 @@ class KalmanFilterState:
         self.P = P0
         self.Q = Q
         self.R = R
+        self.Wx = Wx
 
     def evolve(self, data):
         uk, zk, deltat = packingFunc(data)
@@ -411,7 +424,7 @@ class KalmanFilterState:
         yk = zk - self.h(xint)
         Sk = Hk @ Pint @ Hk.T + self.R
         Kk = Pint @ Hk.T @ np.linalg.inv(Sk)
-        self.x = xint + Kk @ yk
+        self.x = xint + self.Wx @ Kk @ yk
         self.P = (np.eye(Kk.shape[0]) - Kk @ Hk) @ Pint
 
     def getState(self):
@@ -425,24 +438,30 @@ def kalmanProcess(dataMap, state):
         print("Invalid data because the series are different sizes")
 
     output = []
+    covariance = []
     timeCol = []
-    for i in range(dataDims[0]):
-        times = [array[i, 0] for array in dataMap.values()]
-        if not all((time == times[0] for time in times)):
-            print("Row has different time values")
-        timeCol.append(times[0])
-        state.evolve({key: array[i, 1] for key, array in dataMap.items()})
-        x, P = state.getState()
-        output.append(x.T)
-    return np.column_stack((timeCol, np.row_stack(output)))
+    try:
+        for i in range(dataDims[0]):
+            times = [array[i, 0] for array in dataMap.values()]
+            if not all((time == times[0] for time in times)):
+                print("Row has different time values")
+            state.evolve({key: array[i, 1] for key, array in dataMap.items()})
+            timeCol.append(times[0])
+            x, P = state.getState()
+            output.append(x.T)
+            covariance.append(np.diag(P))
+    except Exception as exception:
+        print("Kalman evolution error: {}".format(str(exception)))
+    return np.column_stack((timeCol, np.row_stack(output), np.row_stack(covariance)))
 
 
 if __name__ == "__main__":
     # Parse command line args and set up directories
     args = parser.parse_args((sys.argv[1:]))
+    modelName = os.path.splitext(os.path.basename(args.model))[0]
     outputDir = args.output_dir \
         if not args.output_dir is None \
-        else "kalman-{}".format(args.data_dir)
+        else "kalman-{}-{}".format(args.data_dir, modelName)
     if not os.path.exists(outputDir):
         os.makedirs(outputDir)
     print("Saving output to {}".format(outputDir))
@@ -452,7 +471,7 @@ if __name__ == "__main__":
     with open(args.model, "r") as inputFile:
         # TODO: this is extremely dangerous
         exec(inputFile.read(), globals())
-    packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R = generator.generatePython3Functions(
+    packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx = generator.generatePython3Functions(
         "{}/model.py".format(outputDir))
 
     # Plotting utils
@@ -499,12 +518,13 @@ if __name__ == "__main__":
     deltats[1:, 1] = deltats[1:, 0] - deltats[:-1, 0]
 
     # Run Kalman filter
-    state = KalmanFilterState(packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R)
+    state = KalmanFilterState(packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx)
     kalmanData = kalmanProcess(
         {
+            deltat: deltats,
             Ph_in: utils.data[("t", "P")],
             xs_in: utils.data[("t", "xs")],
-            xe: utils.data[("t", "xe")]
+            xe: utils.data[("t", "xe")],
         }, state)
 
     # Export all Kalman parameters to their own data series and create plots
@@ -514,3 +534,16 @@ if __name__ == "__main__":
             seriesName,
             np.column_stack((kalmanData[:, 0], kalmanData[:, i + 1])))
         plotSeries([seriesName])
+        seriesName = ("t", "kalmancov_{}".format(xvar.symbol))
+        utils.createSeries(
+            seriesName,
+            np.column_stack((kalmanData[:, 0], kalmanData[:, i + len(generator.xvars) + 1])))
+        plotSeries([seriesName])
+
+    # Compare Kalman results against real
+    if ("t", "kalman_xs") in utils.data:
+        plotSeries([("t", "xs"), ("t", "kalman_xs")])
+    if ("t", "kalman_dxsdt") in utils.data:
+        plotSeries([("t", "dxsdt"), ("t", "kalman_dxsdt")])
+    if ("t", "kalman_Ph") in utils.data:
+        plotSeries([("t", "P"), ("t", "kalman_Ph")])

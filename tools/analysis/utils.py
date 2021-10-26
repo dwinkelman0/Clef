@@ -65,8 +65,9 @@ def joinSeries(name1, name2):
 def lowpassFilter(name, a):
     array = data[name]
     kernelSize = int(1 / a)
+    newName = (name[0], "{}_filtered".format(name[1]))
     createSeries(
-        (name[0], "{}_filtered".format(name[1])),
+        newName,
         np.column_stack((
             np.convolve(array[:, 0], np.ones(
                 kernelSize) / kernelSize)[:-kernelSize],
@@ -74,14 +75,19 @@ def lowpassFilter(name, a):
                 kernelSize) / kernelSize)[:-kernelSize],
         ))
     )
+    print("Filtered [{}] {} -> {} samples".format(a,
+          name, data[newName].shape[0]))
 
 
 def derivative(name):
     array = data[name]
+    newName = (name[0], "d{}d{}".format(name[1], name[0]))
     createSeries(
-        (name[0], "d{}d{}".format(name[1], name[0])),
+        newName,
         np.column_stack(((array[:-1, 0] + array[1:, 0]) / 2,
                          (array[1:, 1] - array[:-1, 1]) / (array[1:, 0] - array[:-1, 0]))))
+    print("Differentiated {} -> {} samples".format(name,
+          data[newName].shape[0]))
 
 
 def binaryOperator(array1, array2, op):
