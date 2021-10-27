@@ -60,23 +60,35 @@ def joinSeries(name1, name2):
     createSeries((name1[1], name2[1]), np.column_stack((col1, col2)))
     print("Joined ({}, {}) -> {} samples".format(
         name1[1], name2[1], data[(name1[1], name2[1])].shape[0]))
+    return (name1[1], name2[1])
 
 
-def lowpassFilter(name, a):
-    array = data[name]
+def calculateLowpass(array, a):
     kernelSize = int(1 / a)
-    newName = (name[0], "{}_filtered".format(name[1]))
-    createSeries(
-        newName,
-        np.column_stack((
-            np.convolve(array[:, 0], np.ones(
-                kernelSize) / kernelSize)[:-kernelSize],
-            np.convolve(array[:, 1], np.ones(
-                kernelSize) / kernelSize)[:-kernelSize],
-        ))
+    return np.column_stack((
+        np.convolve(array[:, 0], np.ones(
+            kernelSize) / kernelSize)[:-kernelSize],
+        np.convolve(array[:, 1], np.ones(
+            kernelSize) / kernelSize)[:-kernelSize],
+    ))
+
+
+def calculateRms(name):
+    return np.sqrt(
+        np.sum(
+            unaryOperator(data[name], lambda x: x**2)[:, 1]
+        ) / data[name].shape[0]
     )
+
+
+def lowpassFilter(name, a, newName=None):
+    array = data[name]
+    if newName is None:
+        newName = (name[0], "{}_filtered".format(name[1]))
+    createSeries(newName, calculateLowpass(array, a))
     print("Filtered [{}] {} -> {} samples".format(a,
           name, data[newName].shape[0]))
+    return newName
 
 
 def derivative(name):
@@ -88,11 +100,36 @@ def derivative(name):
                          (array[1:, 1] - array[:-1, 1]) / (array[1:, 0] - array[:-1, 0]))))
     print("Differentiated {} -> {} samples".format(name,
           data[newName].shape[0]))
+    return newName
+
+
+def unaryOperator(array, op):
+    return np.column_stack((array[:, 0], op(array[:, 1])))
 
 
 def binaryOperator(array1, array2, op):
     ts, interp1, interp2 = interp(array1, array2)
     return np.column_stack((ts, op(interp1, interp2)))
+
+
+def errorSeries(referenceName, actualName, newName=None):
+    referenceArray = data[referenceName]
+    actualArray = data[actualName]
+    if newName is None:
+        newName = (actualName[0], "{}_error".format(actualName[1]))
+    ts, interp1, interp2 = interp(referenceArray, actualArray)
+    createSeries(newName, np.column_stack((ts, (interp2 - interp1))))
+    print("Error of {} vs. {} -> {}".format(actualName, referenceName, newName))
+    return newName
+
+
+def smoothness(name, a=0.001):
+    """Calculate "smoothness" of a function by taking the RMS error of the series from its lowpass average"""
+    filterName = (name[0], "{}_filtered_smoothness".format(name[1]))
+    errorName = (name[0], "{}_error_smoothness".format(name[1]))
+    lowpassFilter(name, a, newName=filterName)
+    errorSeries(filterName, name, newName=errorName)
+    return calculateRms(errorName)
 
 
 def plotSeries(names, outputDir, outputFileName=None, show=False, **kwargs):

@@ -5,6 +5,7 @@
 import argparse
 import os
 import sys
+from importlib.machinery import SourceFileLoader
 
 import numpy as np
 
@@ -14,6 +15,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--model", type=str, required=True)
 parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
 parser.add_argument("--output-dir", type=str, default=None)
+
+subparsers = parser.add_subparsers(dest="command")
+optimize_parser = subparsers.add_parser("optimize")
+optimize_parser.add_argument("--gradient", type=float, default=0.1)
 
 
 class Expression:
@@ -234,6 +239,8 @@ class KalmanFilterGenerator:
                 for j in range(len(self.xvars))
              ] for i in range(len(self.zvars))
         ]
+        self.mevars = {}
+        self.msvars = {}
 
     def addStateTransitionFunc(self, processVar, expr):
         index = self.xvars.index(processVar)
@@ -244,6 +251,12 @@ class KalmanFilterGenerator:
         index = self.zvars.index(measurementVar)
         self.h[index] = expr
         self.dhdx[index] = [expr.partialDerivative(var) for var in self.xvars]
+
+    def addErrorMetric(self, metricVar, weight):
+        self.mevars[metricVar] = weight
+
+    def addSmoothnessMetric(self, metricVar, weight):
+        self.msvars[metricVar] = weight
 
     def generatePython3Functions(self, outputPath):
         def generateUnpackingConditionals(vars, varsArrayName):
@@ -385,6 +398,9 @@ class KalmanFilterGenerator:
                     self.xvars),
                 "])",
             ]),
+            "\n".join([
+                "modelConfig = (packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx)",
+            ])
         ])
 
         # Dump source to file
@@ -396,10 +412,6 @@ class KalmanFilterGenerator:
             outputFile.write("import numpy as np\n\n")
             outputFile.write(source)
             outputFile.write("\n")
-
-        # Interpret source into active memory
-        exec(source, globals())
-        return packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx
 
 
 class KalmanFilterState:
@@ -416,7 +428,7 @@ class KalmanFilterState:
         self.Wx = Wx
 
     def evolve(self, data):
-        uk, zk, deltat = packingFunc(data)
+        uk, zk, deltat = self.packingFunc(data)
         xint = self.f(self.x, uk, deltat)
         Fk = self.dfdx(self.x, uk, deltat)
         Hk = self.dhdx(xint)
@@ -428,7 +440,7 @@ class KalmanFilterState:
         self.P = (np.eye(Kk.shape[0]) - Kk @ Hk) @ Pint
 
     def getState(self):
-        return self.x, self.P
+        return self.x, self.P, self.h(self.x)
 
 
 def kalmanProcess(dataMap, state):
@@ -439,6 +451,7 @@ def kalmanProcess(dataMap, state):
 
     output = []
     covariance = []
+    observation = []
     timeCol = []
     try:
         for i in range(dataDims[0]):
@@ -447,12 +460,13 @@ def kalmanProcess(dataMap, state):
                 print("Row has different time values")
             state.evolve({key: array[i, 1] for key, array in dataMap.items()})
             timeCol.append(times[0])
-            x, P = state.getState()
+            x, P, z = state.getState()
             output.append(x.T)
             covariance.append(np.diag(P))
+            observation.append(z.T)
     except Exception as exception:
         print("Kalman evolution error: {}".format(str(exception)))
-    return np.column_stack((timeCol, np.row_stack(output), np.row_stack(covariance)))
+    return np.column_stack((timeCol, np.row_stack(output), np.row_stack(covariance), np.row_stack(observation)))
 
 
 if __name__ == "__main__":
@@ -471,8 +485,9 @@ if __name__ == "__main__":
     with open(args.model, "r") as inputFile:
         # TODO: this is extremely dangerous
         exec(inputFile.read(), globals())
-    packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx = generator.generatePython3Functions(
-        "{}/model.py".format(outputDir))
+    modelFileName = "{}/model.py".format(outputDir)
+    generator.generatePython3Functions(modelFileName)
+    model = SourceFileLoader("model", modelFileName).load_module()
 
     # Plotting utils
     def plotSeries(names, outputFileName=None, show=False, **kwargs):
@@ -518,7 +533,7 @@ if __name__ == "__main__":
     deltats[1:, 1] = deltats[1:, 0] - deltats[:-1, 0]
 
     # Run Kalman filter
-    state = KalmanFilterState(packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx)
+    state = KalmanFilterState(*model.modelConfig)
     kalmanData = kalmanProcess(
         {
             deltat: deltats,
@@ -533,17 +548,34 @@ if __name__ == "__main__":
         utils.createSeries(
             seriesName,
             np.column_stack((kalmanData[:, 0], kalmanData[:, i + 1])))
-        plotSeries([seriesName])
+        smoothnessFilterCoef = 0.01
+        smoothness = utils.smoothness(
+            seriesName, a=smoothnessFilterCoef) / utils.calculateRms(seriesName)
+        plotSeries([
+            seriesName,
+            ("t", "kalman_{}_filtered_smoothness".format(xvar.symbol))])
+        print("{} smoothness: {}".format(xvar.symbol, smoothness))
         seriesName = ("t", "kalmancov_{}".format(xvar.symbol))
         utils.createSeries(
             seriesName,
             np.column_stack((kalmanData[:, 0], kalmanData[:, i + len(generator.xvars) + 1])))
         plotSeries([seriesName])
 
-    # Compare Kalman results against real
-    if ("t", "kalman_xs") in utils.data:
-        plotSeries([("t", "xs"), ("t", "kalman_xs")])
-    if ("t", "kalman_dxsdt") in utils.data:
-        plotSeries([("t", "dxsdt"), ("t", "kalman_dxsdt")])
-    if ("t", "kalman_Ph") in utils.data:
-        plotSeries([("t", "P"), ("t", "kalman_Ph")])
+    # Check error of Kalman results against known metrics
+    if ("t", "kalman_Ph") in utils.data and ("t", "kalman_Ph0") in utils.data:
+        utils.createSeries(("t", "kalman_P"), utils.binaryOperator(
+            utils.data[("t", "kalman_Ph")], utils.data[("t", "kalman_Ph0")],
+            lambda Ph, Ph0: Ph + Ph0
+        ))
+    seriesToCompare = [
+        (("t", "xs"), ("t", "kalman_xs")),
+        (("t", "dxsdt"), ("t", "kalman_dxsdt")),
+        (("t", "P"), ("t", "kalman_P")),
+    ]
+    for referenceName, actualName in seriesToCompare:
+        if referenceName in utils.data and actualName in utils.data:
+            plotSeries([referenceName, actualName])
+            errorName = utils.errorSeries(referenceName, actualName)
+            plotSeries([errorName])
+            print("{} RMS error ratio: {}".format(
+                actualName, utils.calculateRms(errorName) / utils.calculateRms(referenceName)))
