@@ -36,3 +36,17 @@ generator.addStateTransitionFunc(dxsdt, Conditional(
 generator.addStateTransitionFunc(Ph, Chl * (xe - xs))
 generator.addObservationFunc(xs_in, xs)
 generator.addObservationFunc(Ph_in, Ph + Ph0)
+
+# Model optimization
+generator.addErrorMetric(xs_in, xs, 0.1)
+generator.addErrorMetric(dxsdt, dxsdt, 1)
+generator.addErrorMetric(Ph_in, Ph_in, 0.1)
+generator.addSmoothnessMetric(xs, 0.1, 0.01)
+generator.addSmoothnessMetric(dxsdt, 2, 0.01)
+generator.addSmoothnessMetric(Ph, 0.5, 0.01)
+generator.addSmoothnessMetric(Ph0, 1, 0.001)
+generator.addSmoothnessMetric(Ps, 0.5, 0.01)
+generator.addSmoothnessMetric(Pfric, 1, 0.0005)
+generator.addSmoothnessMetric(Chl, 5, 0.0005)
+generator.addSmoothnessMetric(m, 10, 0.0005)
+generator.addSmoothnessMetric(gamma, 5, 0.0005)

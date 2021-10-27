@@ -65,12 +65,14 @@ def joinSeries(name1, name2):
 
 def calculateLowpass(array, a):
     kernelSize = int(1 / a)
-    return np.column_stack((
-        np.convolve(array[:, 0], np.ones(
-            kernelSize) / kernelSize)[:-kernelSize],
-        np.convolve(array[:, 1], np.ones(
-            kernelSize) / kernelSize)[:-kernelSize],
-    ))
+    output = np.zeros(array.shape)
+    output[:, 0] = array[:, 0]
+    for i in range(output.shape[0]):
+        minRange = max(0, i - kernelSize // 2)
+        maxRange = min(output.shape[0], i + kernelSize // 2)
+        output[i, 1] = np.sum(
+            array[minRange:maxRange, 1]) / (maxRange - minRange)
+    return output
 
 
 def calculateRms(name):
@@ -96,8 +98,8 @@ def derivative(name):
     newName = (name[0], "d{}d{}".format(name[1], name[0]))
     createSeries(
         newName,
-        np.column_stack(((array[:-1, 0] + array[1:, 0]) / 2,
-                         (array[1:, 1] - array[:-1, 1]) / (array[1:, 0] - array[:-1, 0]))))
+        np.row_stack((np.array([array[0, 0], 0]), np.column_stack((array[1:, 0],
+                                                                   (array[1:, 1] - array[:-1, 1]) / (array[1:, 0] - array[:-1, 0]))))))
     print("Differentiated {} -> {} samples".format(name,
           data[newName].shape[0]))
     return newName

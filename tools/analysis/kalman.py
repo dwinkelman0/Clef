@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 from importlib.machinery import SourceFileLoader
+from matplotlib.colors import get_named_colors_mapping
 
 import numpy as np
 
@@ -252,11 +253,14 @@ class KalmanFilterGenerator:
         self.h[index] = expr
         self.dhdx[index] = [expr.partialDerivative(var) for var in self.xvars]
 
-    def addErrorMetric(self, metricVar, weight):
-        self.mevars[metricVar] = weight
+    def addErrorMetric(self, referenceVar, actualVar, weight):
+        self.mevars[actualVar] = {
+            "referenceVar": referenceVar,
+            "weight": weight
+        }
 
-    def addSmoothnessMetric(self, metricVar, weight):
-        self.msvars[metricVar] = weight
+    def addSmoothnessMetric(self, metricVar, weight, filterCoef=0.005):
+        self.msvars[metricVar] = {"weight": weight, "filterCoef": filterCoef}
 
     def generatePython3Functions(self, outputPath):
         def generateUnpackingConditionals(vars, varsArrayName):
@@ -469,6 +473,28 @@ def kalmanProcess(dataMap, state):
     return np.column_stack((timeCol, np.row_stack(output), np.row_stack(covariance), np.row_stack(observation)))
 
 
+def calculateCost(generator, inputSeries, outputSeries):
+    cost = 0
+    for var in generator.xvars + generator.zvars:
+        if var in generator.mevars:
+            referenceName = inputSeries[generator.mevars[var]["referenceVar"]]
+            errorName = utils.errorSeries(referenceName, outputSeries[var])
+            error = utils.calculateRms(
+                errorName) / utils.calculateRms(referenceName)
+            costFactor = generator.mevars[var]["weight"] * error
+            cost += costFactor
+            print("{} error: {} ({} factor)".format(
+                var.symbol, error, costFactor))
+        if var in generator.msvars:
+            smoothness = utils.smoothness(
+                outputSeries[var], a=generator.msvars[var]["filterCoef"]) / utils.calculateRms(outputSeries[var])
+            costFactor = generator.msvars[var]["weight"] * smoothness
+            cost += costFactor
+            print("{} smoothness: {} ({} factor)".format(
+                var.symbol, smoothness, costFactor))
+    return cost
+
+
 if __name__ == "__main__":
     # Parse command line args and set up directories
     args = parser.parse_args((sys.argv[1:]))
@@ -531,35 +557,52 @@ if __name__ == "__main__":
     deltats[:, 0] = utils.data[("t", "xe")][:, 0]
     deltats[0, 1] = deltats[0, 0]
     deltats[1:, 1] = deltats[1:, 0] - deltats[:-1, 0]
+    utils.createSeries(("t", "deltat"), deltats)
 
     # Run Kalman filter
     state = KalmanFilterState(*model.modelConfig)
+    kalmanInputSeries = {
+        deltat: ("t", "deltat"),
+        Ph_in: ("t", "P"),
+        xs_in: ("t", "xs"),
+        dxsdt: ("t", "dxsdt"),
+        xe: ("t", "xe"),
+    }
     kalmanData = kalmanProcess(
-        {
-            deltat: deltats,
-            Ph_in: utils.data[("t", "P")],
-            xs_in: utils.data[("t", "xs")],
-            xe: utils.data[("t", "xe")],
-        }, state)
+        {var: utils.data[name] for var, name in kalmanInputSeries.items()}, state)
+    kalmanOutputSeries = {}
 
     # Export all Kalman parameters to their own data series and create plots
     for i, xvar in enumerate(generator.xvars):
         seriesName = ("t", "kalman_{}".format(xvar.symbol))
+        kalmanOutputSeries[xvar] = seriesName
         utils.createSeries(
             seriesName,
             np.column_stack((kalmanData[:, 0], kalmanData[:, i + 1])))
-        smoothnessFilterCoef = 0.01
-        smoothness = utils.smoothness(
-            seriesName, a=smoothnessFilterCoef) / utils.calculateRms(seriesName)
-        plotSeries([
-            seriesName,
-            ("t", "kalman_{}_filtered_smoothness".format(xvar.symbol))])
-        print("{} smoothness: {}".format(xvar.symbol, smoothness))
+
+        if xvar in generator.msvars:
+            smoothnessFilterCoef = generator.msvars[xvar]["filterCoef"]
+            smoothness = utils.smoothness(
+                seriesName, a=smoothnessFilterCoef) / utils.calculateRms(seriesName)
+            plotSeries([
+                seriesName,
+                ("t", "kalman_{}_filtered_smoothness".format(xvar.symbol))])
+            print("{} smoothness: {}".format(xvar.symbol, smoothness))
+        else:
+            plotSeries([seriesName])
+
         seriesName = ("t", "kalmancov_{}".format(xvar.symbol))
         utils.createSeries(
             seriesName,
             np.column_stack((kalmanData[:, 0], kalmanData[:, i + len(generator.xvars) + 1])))
         plotSeries([seriesName])
+
+    for i, zvar in enumerate(generator.zvars):
+        seriesName = ("t", "kalman_{}".format(zvar.symbol))
+        kalmanOutputSeries[zvar] = seriesName
+        utils.createSeries(
+            seriesName,
+            np.column_stack((kalmanData[:, 0], kalmanData[:, len(generator.xvars) * 2 + i + 1])))
 
     # Check error of Kalman results against known metrics
     if ("t", "kalman_Ph") in utils.data and ("t", "kalman_Ph0") in utils.data:
@@ -579,3 +622,7 @@ if __name__ == "__main__":
             plotSeries([errorName])
             print("{} RMS error ratio: {}".format(
                 actualName, utils.calculateRms(errorName) / utils.calculateRms(referenceName)))
+
+    # Calculate costs
+    cost = calculateCost(generator, kalmanInputSeries, kalmanOutputSeries)
+    print("Overall cost: {}".format(cost))
