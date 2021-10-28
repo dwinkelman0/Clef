@@ -19,30 +19,6 @@ availableDirs = [name for name in os.listdir(".") if os.path.isdir(
 DEFAULT_DATA_DIR = max(availableDirs) if len(availableDirs) > 0 else None
 
 
-data = {}
-
-
-def createSeries(names, array):
-    data[names] = array
-
-
-def importDataFiles(dirname):
-    pairs = {}
-    for name in os.listdir(dirname):
-        filepath = "{}/{}".format(dirname, name)
-        if os.path.isfile(filepath) and DATA_FILENAME_RE.match(name):
-            pairs[name] = np.load(filepath)
-
-    for name, array in pairs.items():
-        print("{}: {} samples ({})".format(name, array.shape, array.dtype))
-        components = name.split(".")[0].split("-")
-        key = (components[2], components[0])
-        array = np.column_stack(
-            ((array[:, 0] - array[0, 0]) * 1e-6, array[:, 1]))
-        array = array[1:][array[:-1, 0] < array[1:, 0]]
-        createSeries(key, array)
-
-
 def interp(*arrays):
     ts = np.concatenate([array[:, 0] for array in arrays])
     ts.sort()
@@ -50,17 +26,23 @@ def interp(*arrays):
     return (ts,) + tuple((np.interp(ts, array[:, 0], array[:, 1]) for array in arrays))
 
 
-def joinSeries(name1, name2):
-    if name1[0] != name2[0]:
-        print("Independent variables must be the same (tried {} and {})".format(
-            name1, name2))
-        return
+def unaryOperator(array, op):
+    return np.column_stack((array[:, 0], op(array[:, 1])))
 
-    joint, col1, col2 = interp(data[name1], data[name2])
-    createSeries((name1[1], name2[1]), np.column_stack((col1, col2)))
-    print("Joined ({}, {}) -> {} samples".format(
-        name1[1], name2[1], data[(name1[1], name2[1])].shape[0]))
-    return (name1[1], name2[1])
+
+def binaryOperator(array1, array2, op):
+    ts, interp1, interp2 = interp(array1, array2)
+    return np.column_stack((ts, op(interp1, interp2)))
+
+
+def calculateDerivative(array):
+    return np.row_stack((
+        np.array([array[0, 0], 0]),
+        np.column_stack((
+            array[1:, 0],
+            (array[1:, 1] - array[:-1, 1]) / (array[1:, 0] - array[:-1, 0])
+        )),
+    ))
 
 
 def calculateLowpass(array, a):
@@ -75,89 +57,114 @@ def calculateLowpass(array, a):
     return output
 
 
-def calculateRms(name):
+def calculateRms(array):
     return np.sqrt(
         np.sum(
-            unaryOperator(data[name], lambda x: x**2)[:, 1]
-        ) / data[name].shape[0]
+            unaryOperator(array, lambda x: x**2)[:, 1]
+        ) / array.shape[0]
     )
 
 
-def lowpassFilter(name, a, newName=None):
-    array = data[name]
-    if newName is None:
-        newName = (name[0], "{}_filtered".format(name[1]))
-    createSeries(newName, calculateLowpass(array, a))
-    print("Filtered [{}] {} -> {} samples".format(a,
-          name, data[newName].shape[0]))
-    return newName
+class Series:
+    def __init__(self, ind, dep, array):
+        self.ind = ind
+        self.dep = dep
+        self.array = array
+
+    def asTuple(self):
+        return (self.ind, self.dep)
+
+    def __str__(self):
+        return str(self.asTuple())
+
+    def numRows(self):
+        return self.array.shape[0]
+
+    def applyUnary(self, func, newDep=None):
+        return Series(self.ind, self.dep if newDep is None else newDep, unaryOperator(self.array, func))
+
+    def applyBinary(self, other, func, newDep=None):
+        return Series(self. ind, self.dep if newDep is None else newDep, binaryOperator(self.array, other.array, func))
+
+    def lowpass(self, a, newDep=None):
+        if newDep is None:
+            newDep = "{}_filtered".format(self.dep)
+        return Series(self.ind, newDep, calculateLowpass(self.array, a))
+
+    def rms(self):
+        return calculateRms(self.array)
+
+    def derivative(self, newDep=None):
+        if newDep is None:
+            newDep = "d{}d{}".format(self.dep, self.ind)
+        return Series(self.ind, newDep, calculateDerivative(self.array))
+
+    def join(self, other):
+        # Join this series as independent variable with another series
+        if self.ind != other.ind:
+            raise TypeError("Independent variables must match; these are {} and {}".format(
+                self.ind, other.ind))
+        ts, interp1, interp2 = interp(self.array, other.array)
+        return Series(self.dep, other.dep, np.column_stack((interp1, interp2)))
+
+    def error(self, reference, newDep=None):
+        # Calculate the error of this series against a reference
+        if self.ind != reference.ind:
+            raise TypeError("Independent variables must match; these are {} and {}".format(
+                self.ind, reference.ind))
+        if newDep is None:
+            newDep = "{}_error".format(self.dep)
+        ts, interp1, interp2 = interp(self.array, reference.array)
+        return Series(self.ind, newDep, np.column_stack((ts, interp2 - interp1)))
+
+    def smoothness(self, name, a=0.001):
+        # Calculate "smoothness" of a function by taking the
+        # RMS error of the series from its lowpass average
+        return self.error(self.lowpass(a)).rms()
 
 
-def derivative(name):
-    array = data[name]
-    newName = (name[0], "d{}d{}".format(name[1], name[0]))
-    createSeries(
-        newName,
-        np.row_stack((np.array([array[0, 0], 0]), np.column_stack((array[1:, 0],
-                                                                   (array[1:, 1] - array[:-1, 1]) / (array[1:, 0] - array[:-1, 0]))))))
-    print("Differentiated {} -> {} samples".format(name,
-          data[newName].shape[0]))
-    return newName
+def importDataFiles(dirname):
+    pairs = {}
+    for name in os.listdir(dirname):
+        filepath = "{}/{}".format(dirname, name)
+        if os.path.isfile(filepath) and DATA_FILENAME_RE.match(name):
+            pairs[name] = np.load(filepath)
+
+    output = {}
+    for name, array in pairs.items():
+        print("{}: {} samples ({})".format(name, array.shape, array.dtype))
+        components = name.split(".")[0].split("-")
+        array = np.column_stack(
+            ((array[:, 0] - array[0, 0]) * 1e-6, array[:, 1]))
+        array = array[1:][array[:-1, 0] < array[1:, 0]]
+        output[components[0]] = Series(components[2], components[0], array)
+    return output
 
 
-def unaryOperator(array, op):
-    return np.column_stack((array[:, 0], op(array[:, 1])))
-
-
-def binaryOperator(array1, array2, op):
-    ts, interp1, interp2 = interp(array1, array2)
-    return np.column_stack((ts, op(interp1, interp2)))
-
-
-def errorSeries(referenceName, actualName, newName=None):
-    referenceArray = data[referenceName]
-    actualArray = data[actualName]
-    if newName is None:
-        newName = (actualName[0], "{}_error".format(actualName[1]))
-    ts, interp1, interp2 = interp(referenceArray, actualArray)
-    createSeries(newName, np.column_stack((ts, (interp2 - interp1))))
-    print("Error of {} vs. {} -> {}".format(actualName, referenceName, newName))
-    return newName
-
-
-def smoothness(name, a=0.001):
-    """Calculate "smoothness" of a function by taking the RMS error of the series from its lowpass average"""
-    filterName = (name[0], "{}_filtered_smoothness".format(name[1]))
-    errorName = (name[0], "{}_error_smoothness".format(name[1]))
-    lowpassFilter(name, a, newName=filterName)
-    errorSeries(filterName, name, newName=errorName)
-    return calculateRms(errorName)
-
-
-def plotSeries(names, outputDir, outputFileName=None, show=False, **kwargs):
+def plotSeries(series, outputDir, outputFileName=None, show=False, **kwargs):
     # Check that all independent variables are the same
-    if not all((name[0] == names[0][0] for name in names)):
+    if not all((s.ind == series[0].ind for s in series)):
         print("Could not plot {} because the independent variables are different".format(
-            (", ".join(map(str, names)))))
+            (", ".join(map(str, series)))))
         return
 
     # Come up with a file name
     if outputFileName is None:
         outputFileName = "{}-vs-{}.png".format(
-            ",".join((name[1] for name in names)),
-            names[0][0])
+            ",".join((s.dep for s in series)),
+            series[0].ind)
     outputDir = "{}/{}".format(outputDir, outputFileName)
 
-    print("Plot ({}) -> \"{}\"".format(", ".join(map(str, names)), outputDir))
+    print("Plot ({}) -> \"{}\"".format(", ".join(map(str, series)), outputDir))
 
     plt.figure(dpi=200)
-    for name in names:
-        array = data[name]
+    for s in series:
         if "style" in kwargs:
-            plt.plot(array[:, 0], array[:, 1], kwargs["style"], label=name[1])
+            plt.plot(s.array[:, 0], s.array[:, 1],
+                     kwargs["style"], label=s.dep)
         else:
-            plt.plot(array[:, 0], array[:, 1], label=name[1])
-        plt.xlabel(name[0])
+            plt.plot(s.array[:, 0], s.array[:, 1], label=s.dep)
+        plt.xlabel(s.ind)
     plt.legend()
     plt.title(outputDir)
     plt.savefig(outputDir)

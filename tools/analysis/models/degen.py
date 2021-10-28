@@ -1,5 +1,7 @@
 # Copyright 2021 by Daniel Winkelman. All rights reserved.
 
+from kalman import *
+
 # Time step
 deltat = ProcessVariable("deltat", 0, 0, 0, "sec")
 

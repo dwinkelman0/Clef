@@ -16,10 +16,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--model", type=str, required=True)
 parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
 parser.add_argument("--output-dir", type=str, default=None)
+parser.add_argument("--no-plots", action="store_true", default=False)
 
 subparsers = parser.add_subparsers(dest="command")
 optimize_parser = subparsers.add_parser("optimize")
-optimize_parser.add_argument("--gradient", type=float, default=0.1)
+optimize_parser.add_argument("--step-size", type=float, default=0.02)
 
 
 class Expression:
@@ -449,7 +450,7 @@ class KalmanFilterState:
 
 def kalmanProcess(dataMap, state):
     # Check that all data series are the same length
-    dataDims = [data.shape[0] for data in dataMap.values()]
+    dataDims = [series.numRows() for series in dataMap.values()]
     if not all((dataDims[0] == dim for dim in dataDims)):
         print("Invalid data because the series are different sizes")
 
@@ -459,10 +460,11 @@ def kalmanProcess(dataMap, state):
     timeCol = []
     try:
         for i in range(dataDims[0]):
-            times = [array[i, 0] for array in dataMap.values()]
+            times = [series.array[i, 0] for series in dataMap.values()]
             if not all((time == times[0] for time in times)):
                 print("Row has different time values")
-            state.evolve({key: array[i, 1] for key, array in dataMap.items()})
+            state.evolve({key: series.array[i, 1]
+                         for key, series in dataMap.items()})
             timeCol.append(times[0])
             x, P, z = state.getState()
             output.append(x.T)
@@ -470,159 +472,153 @@ def kalmanProcess(dataMap, state):
             observation.append(z.T)
     except Exception as exception:
         print("Kalman evolution error: {}".format(str(exception)))
+        return None
     return np.column_stack((timeCol, np.row_stack(output), np.row_stack(covariance), np.row_stack(observation)))
 
 
-def calculateCost(generator, inputSeries, outputSeries):
-    cost = 0
+def calculateErrorCosts(generator, inputSeries, outputSeries, plotFunc):
+    costs = {}
     for var in generator.xvars + generator.zvars:
         if var in generator.mevars:
-            referenceName = inputSeries[generator.mevars[var]["referenceVar"]]
-            errorName = utils.errorSeries(referenceName, outputSeries[var])
-            error = utils.calculateRms(
-                errorName) / utils.calculateRms(referenceName)
+            referenceSeries = \
+                inputSeries[generator.mevars[var]["referenceVar"]]
+            errorSeries = outputSeries[var].error(referenceSeries)
+            error = errorSeries.rms() / referenceSeries.rms()
             costFactor = generator.mevars[var]["weight"] * error
-            cost += costFactor
-            print("{} error: {} ({} factor)".format(
-                var.symbol, error, costFactor))
+            costs[var] = costFactor
+            plotFunc([referenceSeries, outputSeries[var]])
+    return costs
+
+
+def calculateSmoothnessCosts(generator, inputSeries, outputSeries):
+    costs = {}
+    for var in generator.xvars + generator.zvars:
         if var in generator.msvars:
-            smoothness = utils.smoothness(
-                outputSeries[var], a=generator.msvars[var]["filterCoef"]) / utils.calculateRms(outputSeries[var])
+            smoothness = \
+                outputSeries[var].smoothness(generator.msvars[var]["filterCoef"]) / \
+                outputSeries[var].rms()
             costFactor = generator.msvars[var]["weight"] * smoothness
-            cost += costFactor
-            print("{} smoothness: {} ({} factor)".format(
-                var.symbol, smoothness, costFactor))
-    return cost
+            costs[var] = costFactor
+    return costs
 
 
-if __name__ == "__main__":
-    # Parse command line args and set up directories
-    args = parser.parse_args((sys.argv[1:]))
-    modelName = os.path.splitext(os.path.basename(args.model))[0]
-    outputDir = args.output_dir \
-        if not args.output_dir is None \
-        else "kalman-{}-{}".format(args.data_dir, modelName)
+def processDataSet(dataDir, modelDir, outputDir, initialConditionAdjustments, generatePlots=False):
+    modelName = os.path.splitext(os.path.basename(modelDir))[0]
+    outputDir = outputDir \
+        if not outputDir is None \
+        else "kalman-{}-{}".format(dataDir, modelName)
     if not os.path.exists(outputDir):
         os.makedirs(outputDir)
     print("Saving output to {}".format(outputDir))
 
     # Import and compile Kalman Filter
     print("Opening and compiling Kalman filter {}...".format(args.model))
-    with open(args.model, "r") as inputFile:
-        # TODO: this is extremely dangerous
-        exec(inputFile.read(), globals())
+    spec = SourceFileLoader("spec", args.model).load_module()
     modelFileName = "{}/model.py".format(outputDir)
-    generator.generatePython3Functions(modelFileName)
+    spec.generator.generatePython3Functions(modelFileName)
     model = SourceFileLoader("model", modelFileName).load_module()
 
     # Plotting utils
-    def plotSeries(names, outputFileName=None, show=False, **kwargs):
-        utils.plotSeries(names, outputDir=outputDir,
+    def plotSeries(series, outputFileName=None, show=False, **kwargs):
+        if args.no_plots:
+            return
+        utils.plotSeries(series, outputDir=outputDir,
                          outputFileName=outputFileName, show=show, **kwargs)
 
     # Import data
-    print("Opening data directory {}...".format(args.data_dir))
-    utils.importDataFiles(args.data_dir)
+    print("Opening data directory {}...".format(dataDir))
+    inputData = utils.importDataFiles(dataDir)
 
     # Normalize data
-    utils.data[("t", "xe")][:, 1] = utils.data[("t", "xe")
-                                               ][:, 1] - utils.data[("t", "xe")][0, 1]
-    utils.data[("t", "xs")][:, 1] = utils.data[("t", "xs")
-                                               ][:, 1] - utils.data[("t", "xs")][0, 1]
+    inputData["xe"] = inputData["xe"].applyUnary(
+        lambda x: x - inputData["xe"].array[0, 1])
+    inputData["xs"] = inputData["xs"].applyUnary(
+        lambda x: x - inputData["xs"].array[0, 1])
 
-    # Generate derivative data
-    utils.createSeries(("t", "deltax"), utils.binaryOperator(
-        utils.data[("t", "xe")], utils.data[("t", "xs")], lambda a1, a2: a1 - a2))
-    utils.joinSeries(("t", "P"), ("t", "deltax"))
-    utils.lowpassFilter(("t", "xe"), 0.1)
-    utils.derivative(("t", "xe_filtered"))
-    utils.data[("t", "dxedt")] = utils.data[("t", "dxe_filtereddt")]
-    utils.lowpassFilter(("t", "xs"), 0.1)
-    utils.derivative(("t", "xs_filtered"))
-    utils.data[("t", "dxsdt")] = utils.data[("t", "dxs_filtereddt")]
-    utils.joinSeries(("t", "P"), ("t", "dxsdt"))
-    utils.joinSeries(("t", "dxsdt"), ("t", "deltax"))
-
-    # Plot original data
-    plotSeries([("t", "xe"), ("t", "xs")])
-    plotSeries([("t", "dxedt"), ("t", "dxsdt")])
-    plotSeries([("t", "P")])
-    plotSeries([("t", "deltax")])
-    plotSeries([("P", "deltax")])
-    plotSeries([("P", "dxsdt")])
-    plotSeries([("dxsdt", "deltax")])
-
-    # Calculate deltat
-    deltats = np.zeros(utils.data[("t", "xe")].shape)
-    deltats[:, 0] = utils.data[("t", "xe")][:, 0]
+    # Generate derived data
+    inputData["dxsdt"] = inputData["xs"].lowpass(0.1).derivative()
+    deltats = np.zeros(inputData["xe"].array.shape)
+    deltats[:, 0] = inputData["xe"].array[:, 0]
     deltats[0, 1] = deltats[0, 0]
     deltats[1:, 1] = deltats[1:, 0] - deltats[:-1, 0]
-    utils.createSeries(("t", "deltat"), deltats)
+    inputData["deltat"] = utils.Series("t", "deltat", deltats)
+
+    # Optional data for plotting
+    if not args.no_plots:
+        deltax = inputData["xe"].applyBinary(
+            inputData["xs"], lambda xe, xs: xe - xs, newDep="deltax")
+        dxedt = inputData["xe"].lowpass(0.1).derivative(newDep="dxedt")
+        deltax_vs_P = inputData["P"].join(deltax)
+        dxsdt_vs_P = inputData["dxsdt"].join(inputData["P"])
+        deltax_vs_dxsdt = inputData["dxsdt"].join(deltax)
+
+        plotSeries([inputData["xe"], inputData["xs"]])
+        plotSeries([dxedt, inputData["dxsdt"]])
+        plotSeries([inputData["P"]])
+        plotSeries([deltax])
+        plotSeries([deltax_vs_P])
+        plotSeries([dxsdt_vs_P])
+        plotSeries([deltax_vs_dxsdt])
 
     # Run Kalman filter
     state = KalmanFilterState(*model.modelConfig)
     kalmanInputSeries = {
-        deltat: ("t", "deltat"),
-        Ph_in: ("t", "P"),
-        xs_in: ("t", "xs"),
-        dxsdt: ("t", "dxsdt"),
-        xe: ("t", "xe"),
+        spec.deltat: inputData["deltat"],
+        spec.Ph_in: inputData["P"],
+        spec.xs_in: inputData["xs"],
+        spec.dxsdt: inputData["dxsdt"],
+        spec.xe: inputData["xe"],
     }
-    kalmanData = kalmanProcess(
-        {var: utils.data[name] for var, name in kalmanInputSeries.items()}, state)
     kalmanOutputSeries = {}
+    kalmanData = kalmanProcess(kalmanInputSeries, state)
+    if kalmanData is None:
+        print("Exiting...")
+        exit(0)
 
     # Export all Kalman parameters to their own data series and create plots
-    for i, xvar in enumerate(generator.xvars):
-        seriesName = ("t", "kalman_{}".format(xvar.symbol))
-        kalmanOutputSeries[xvar] = seriesName
-        utils.createSeries(
-            seriesName,
-            np.column_stack((kalmanData[:, 0], kalmanData[:, i + 1])))
+    for i, xvar in enumerate(spec.xvars):
+        seriesName = "kalman_{}".format(xvar)
+        series = utils.Series("t", seriesName, np.column_stack(
+            (kalmanData[:, 0], kalmanData[:, i + 1])))
+        kalmanOutputSeries[xvar] = series
 
-        if xvar in generator.msvars:
-            smoothnessFilterCoef = generator.msvars[xvar]["filterCoef"]
-            smoothness = utils.smoothness(
-                seriesName, a=smoothnessFilterCoef) / utils.calculateRms(seriesName)
-            plotSeries([
-                seriesName,
-                ("t", "kalman_{}_filtered_smoothness".format(xvar.symbol))])
-            print("{} smoothness: {}".format(xvar.symbol, smoothness))
+        if xvar in spec.generator.msvars:
+            a = spec.generator.msvars[xvar]["filterCoef"]
+            filtered = series.lowpass(a)
+            plotSeries([series, filtered])
         else:
-            plotSeries([seriesName])
+            plotSeries([series])
 
-        seriesName = ("t", "kalmancov_{}".format(xvar.symbol))
-        utils.createSeries(
-            seriesName,
-            np.column_stack((kalmanData[:, 0], kalmanData[:, i + len(generator.xvars) + 1])))
-        plotSeries([seriesName])
+        seriesName = "kalman_cov_{}".format(xvar)
+        series = utils.Series("t", seriesName, np.column_stack(
+            (kalmanData[:, 0], kalmanData[:, len(spec.generator.xvars) + i + 1])))
+        plotSeries([series])
 
-    for i, zvar in enumerate(generator.zvars):
-        seriesName = ("t", "kalman_{}".format(zvar.symbol))
-        kalmanOutputSeries[zvar] = seriesName
-        utils.createSeries(
-            seriesName,
-            np.column_stack((kalmanData[:, 0], kalmanData[:, len(generator.xvars) * 2 + i + 1])))
-
-    # Check error of Kalman results against known metrics
-    if ("t", "kalman_Ph") in utils.data and ("t", "kalman_Ph0") in utils.data:
-        utils.createSeries(("t", "kalman_P"), utils.binaryOperator(
-            utils.data[("t", "kalman_Ph")], utils.data[("t", "kalman_Ph0")],
-            lambda Ph, Ph0: Ph + Ph0
-        ))
-    seriesToCompare = [
-        (("t", "xs"), ("t", "kalman_xs")),
-        (("t", "dxsdt"), ("t", "kalman_dxsdt")),
-        (("t", "P"), ("t", "kalman_P")),
-    ]
-    for referenceName, actualName in seriesToCompare:
-        if referenceName in utils.data and actualName in utils.data:
-            plotSeries([referenceName, actualName])
-            errorName = utils.errorSeries(referenceName, actualName)
-            plotSeries([errorName])
-            print("{} RMS error ratio: {}".format(
-                actualName, utils.calculateRms(errorName) / utils.calculateRms(referenceName)))
+    for i, zvar in enumerate(spec.generator.zvars):
+        seriesName = "kalman_{}".format(zvar)
+        series = utils.Series("t", seriesName, np.column_stack(
+            (kalmanData[:, 0], kalmanData[:, len(spec.generator.xvars) * 2 + i + 1])))
+        kalmanOutputSeries[zvar] = series
+        plotSeries([series])
 
     # Calculate costs
-    cost = calculateCost(generator, kalmanInputSeries, kalmanOutputSeries)
-    print("Overall cost: {}".format(cost))
+    errorCosts = calculateErrorCosts(
+        spec.generator, kalmanInputSeries, kalmanOutputSeries, plotSeries)
+    smoothnessCosts = calculateSmoothnessCosts(
+        spec.generator, kalmanInputSeries, kalmanOutputSeries)
+    totalCost = sum(errorCosts.values()) + sum(smoothnessCosts.values())
+    print("Total Cost: {}".format(totalCost))
+    summaries = [("error", var.symbol, cost) for var, cost in errorCosts.items()] + \
+        [("smoothness", var.symbol, cost)
+         for var, cost in smoothnessCosts.items()]
+    summaries.sort(key=lambda row: row[2], reverse=True)
+    for category, symbol, cost in summaries:
+        print(" * {}: {:.3f}% ({:.3e})".format(
+            "{}-{}:".format(category, symbol).ljust(24, "."),
+            100 * cost / totalCost, cost))
+
+
+if __name__ == "__main__":
+    # Parse command line args and set up directories
+    args = parser.parse_args((sys.argv[1:]))
+    processDataSet(args.data_dir, args.model, args.output_dir, None)
