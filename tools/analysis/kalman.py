@@ -486,6 +486,7 @@ def calculateErrorCosts(generator, inputSeries, outputSeries, plotFunc):
             error = errorSeries.rms() / referenceSeries.rms()
             costFactor = generator.mevars[var]["weight"] * error
             costs[var] = costFactor
+            plotFunc([errorSeries])
             plotFunc([referenceSeries, outputSeries[var]])
     return costs
 
@@ -502,25 +503,49 @@ def calculateSmoothnessCosts(generator, inputSeries, outputSeries):
     return costs
 
 
-def processDataSet(dataDir, modelDir, outputDir, initialConditionAdjustments, generatePlots=False):
+def openKalmanSpec(modelDir):
+    print("Opening Kalman filter spec {}...".format(modelDir))
+    spec = SourceFileLoader("spec", modelDir).load_module()
+    return spec
+
+
+def restoreKalmanSpec(spec, varGroup, index, param, value):
+    setattr(getattr(spec, varGroup)[index], param, value)
+
+
+def manipulateKalmanSpec(spec, varGroup, index, param, change):
+    if varGroup == "zvars" and (param == "initialValue" or param == "initialCovariance"):
+        return None
+    var = getattr(spec, varGroup)[index]
+    origValue = getattr(var, param)
+    if origValue == 0:
+        return None
+    setattr(var, param, origValue * (1 + change))
+    return origValue
+
+
+def prepareKalmanAnalysis(dataDir, modelDir, outputDir, spec, subdirs=[]):
     modelName = os.path.splitext(os.path.basename(modelDir))[0]
     outputDir = outputDir \
         if not outputDir is None \
         else "kalman-{}-{}".format(dataDir, modelName)
+    outputDir = "/".join([outputDir] + subdirs)
     if not os.path.exists(outputDir):
         os.makedirs(outputDir)
     print("Saving output to {}".format(outputDir))
 
     # Import and compile Kalman Filter
-    print("Opening and compiling Kalman filter {}...".format(args.model))
-    spec = SourceFileLoader("spec", args.model).load_module()
     modelFileName = "{}/model.py".format(outputDir)
     spec.generator.generatePython3Functions(modelFileName)
     model = SourceFileLoader("model", modelFileName).load_module()
 
+    return outputDir, model
+
+
+def kalmanAnalysis(dataDir, spec, model, outputDir, generatePlots=False, completeSummary=False):
     # Plotting utils
     def plotSeries(series, outputFileName=None, show=False, **kwargs):
-        if args.no_plots:
+        if not generatePlots:
             return
         utils.plotSeries(series, outputDir=outputDir,
                          outputFileName=outputFileName, show=show, **kwargs)
@@ -544,7 +569,7 @@ def processDataSet(dataDir, modelDir, outputDir, initialConditionAdjustments, ge
     inputData["deltat"] = utils.Series("t", "deltat", deltats)
 
     # Optional data for plotting
-    if not args.no_plots:
+    if generatePlots:
         deltax = inputData["xe"].applyBinary(
             inputData["xs"], lambda xe, xs: xe - xs, newDep="deltax")
         dxedt = inputData["xe"].lowpass(0.1).derivative(newDep="dxedt")
@@ -572,8 +597,7 @@ def processDataSet(dataDir, modelDir, outputDir, initialConditionAdjustments, ge
     kalmanOutputSeries = {}
     kalmanData = kalmanProcess(kalmanInputSeries, state)
     if kalmanData is None:
-        print("Exiting...")
-        exit(0)
+        return None
 
     # Export all Kalman parameters to their own data series and create plots
     for i, xvar in enumerate(spec.xvars):
@@ -607,18 +631,68 @@ def processDataSet(dataDir, modelDir, outputDir, initialConditionAdjustments, ge
     smoothnessCosts = calculateSmoothnessCosts(
         spec.generator, kalmanInputSeries, kalmanOutputSeries)
     totalCost = sum(errorCosts.values()) + sum(smoothnessCosts.values())
-    print("Total Cost: {}".format(totalCost))
-    summaries = [("error", var.symbol, cost) for var, cost in errorCosts.items()] + \
-        [("smoothness", var.symbol, cost)
-         for var, cost in smoothnessCosts.items()]
-    summaries.sort(key=lambda row: row[2], reverse=True)
-    for category, symbol, cost in summaries:
-        print(" * {}: {:.3f}% ({:.3e})".format(
-            "{}-{}:".format(category, symbol).ljust(24, "."),
-            100 * cost / totalCost, cost))
+    if completeSummary:
+        print("Total Cost: {}".format(totalCost))
+        summaries = [("error", var.symbol, cost) for var, cost in errorCosts.items()] + \
+            [("smoothness", var.symbol, cost)
+             for var, cost in smoothnessCosts.items()]
+        summaries.sort(key=lambda row: row[2], reverse=True)
+        for category, symbol, cost in summaries:
+            print(" * {}: {:.3f}% ({:.3e})".format(
+                "{}-{}:".format(category, symbol).ljust(24, "."),
+                100 * cost / totalCost, cost))
+    return totalCost
 
 
 if __name__ == "__main__":
     # Parse command line args and set up directories
     args = parser.parse_args((sys.argv[1:]))
-    processDataSet(args.data_dir, args.model, args.output_dir, None)
+    spec = openKalmanSpec(args.model)
+    outputDir, model = prepareKalmanAnalysis(
+        args.data_dir, args.model, args.output_dir, spec, subdirs=["original"])
+    originalCost = kalmanAnalysis(args.data_dir, spec, model, outputDir,
+                                  generatePlots=not args.no_plots, completeSummary=True)
+    if args.command == "optimize":
+        for n in range(100):
+            costs = []
+            outputDir, model = prepareKalmanAnalysis(
+                args.data_dir, args.model, args.output_dir, spec, subdirs=[str(n), "reference"])
+            referenceCost = kalmanAnalysis(args.data_dir, spec, model, outputDir,
+                                           generatePlots=not args.no_plots, completeSummary=True)
+            for group in ["xvars", "zvars"]:
+                for index, var in enumerate(getattr(spec, group)):
+                    for param in ["initialValue", "initialCovariance", "noise"]:
+                        for direction, change in [("dec", -args.step_size), ("inc", args.step_size)]:
+                            address = (group, index, param)
+                            origValue = manipulateKalmanSpec(
+                                spec, *address, change)
+                            if origValue is None:
+                                continue
+                            outputDir, model = prepareKalmanAnalysis(
+                                args.data_dir, args.model, args.output_dir, spec,
+                                subdirs=[str(n), str(var), param, direction])
+                            costs.append((
+                                address,
+                                kalmanAnalysis(args.data_dir, spec, model, outputDir,
+                                               generatePlots=False, completeSummary=False),
+                                change,
+                                origValue))
+                            restoreKalmanSpec(spec, *address, origValue)
+            costs = list(filter(lambda row: row[1] is not None, costs))
+            costs.sort(key=lambda row: row[1])
+            bestCost = referenceCost
+            for index, (address, cost, change, origValue) in enumerate(costs):
+                manipulateKalmanSpec(spec, *address, change)
+                outputDir, model = prepareKalmanAnalysis(
+                    args.data_dir, args.model, args.output_dir, spec, subdirs=[str(n), "optimize", str(index)])
+                newCost = kalmanAnalysis(args.data_dir, spec, model, outputDir,
+                                         generatePlots=False, completeSummary=False)
+                if newCost is None or newCost >= bestCost:
+                    restoreKalmanSpec(spec, *address, origValue)
+                    break
+                else:
+                    bestCost = newCost
+                    print("Applying {} optimizes down to {}".format(
+                        address, newCost))
+            if bestCost == referenceCost:
+                break
