@@ -57,6 +57,16 @@ def calculateLowpass(array, a):
     return output
 
 
+def calculateExpLowpass(array, a):
+    output = np.zeros(array.shape)
+    state = 0
+    for i in range(array.shape[0]):
+        state = state * (1 - a) + a * array[i, 1]
+        output[i, 0] = array[i, 0]
+        output[i, 1] = state
+    return output
+
+
 def calculateRms(array):
     return np.sqrt(
         np.sum(
@@ -91,8 +101,16 @@ class Series:
             newDep = "{}_filtered".format(self.dep)
         return Series(self.ind, newDep, calculateLowpass(self.array, a))
 
+    def expLowpass(self, a, newDep=None):
+        if newDep is None:
+            newDep = "{}_expfiltered".format(self.dep)
+        return Series(self.ind, newDep, calculateExpLowpass(self.array, a))
+
     def rms(self):
         return calculateRms(self.array)
+
+    def averageAbs(self):
+        return np.sum(np.abs(self.array[:, 1])) / self.numRows()
 
     def derivative(self, newDep=None):
         if newDep is None:
@@ -121,6 +139,14 @@ class Series:
         # Calculate "smoothness" of a function by taking the
         # RMS error of the series from its lowpass average
         return self.error(self.lowpass(a)).rms()
+
+    def negativity(self):
+        # Calculate the amount of signal that is negative
+        data = self.array[:, 1]
+        data[data > 0] = 0
+        negative = Series(self.ind, self.dep,
+                          np.column_stack((self.array[:, 0], data)))
+        return negative.rms() / self.rms()
 
 
 def importDataFiles(dirname):

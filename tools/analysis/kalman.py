@@ -17,10 +17,11 @@ parser.add_argument("--model", type=str, required=True)
 parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
 parser.add_argument("--output-dir", type=str, default=None)
 parser.add_argument("--no-plots", action="store_true", default=False)
+parser.add_argument("--deltat-catchup", type=float, default=1)
 
 subparsers = parser.add_subparsers(dest="command")
 optimize_parser = subparsers.add_parser("optimize")
-optimize_parser.add_argument("--step-size", type=float, default=0.02)
+optimize_parser.add_argument("--step-size", type=float, default=0.2)
 
 
 class Expression:
@@ -243,6 +244,7 @@ class KalmanFilterGenerator:
         ]
         self.mevars = {}
         self.msvars = {}
+        self.mnvars = {}
 
     def addStateTransitionFunc(self, processVar, expr):
         index = self.xvars.index(processVar)
@@ -262,6 +264,9 @@ class KalmanFilterGenerator:
 
     def addSmoothnessMetric(self, metricVar, weight, filterCoef=0.005):
         self.msvars[metricVar] = {"weight": weight, "filterCoef": filterCoef}
+
+    def addNegativityMetric(self, metricVar, weight):
+        self.mnvars[metricVar] = {"weight": weight}
 
     def generatePython3Functions(self, outputPath):
         def generateUnpackingConditionals(vars, varsArrayName):
@@ -419,7 +424,7 @@ class KalmanFilterGenerator:
             outputFile.write("\n")
 
 
-class KalmanFilterState:
+class ExtendedKalmanFilterState:
     def __init__(self, packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx):
         self.packingFunc = packingFunc
         self.f = f
@@ -437,12 +442,13 @@ class KalmanFilterState:
         xint = self.f(self.x, uk, deltat)
         Fk = self.dfdx(self.x, uk, deltat)
         Hk = self.dhdx(xint)
-        Pint = Fk @ self.P @ Fk.T + self.Q
+        Pminus = Fk @ self.P @ Fk.T + self.Q
         yk = zk - self.h(xint)
-        Sk = Hk @ Pint @ Hk.T + self.R
-        Kk = Pint @ Hk.T @ np.linalg.inv(Sk)
+        Sk = Hk @ Pminus @ Hk.T + self.R
+        Kk = Pminus @ Hk.T @ np.linalg.inv(Sk)
         self.x = xint + self.Wx @ Kk @ yk
-        self.P = (np.eye(Kk.shape[0]) - Kk @ Hk) @ Pint
+        Pplus = (np.eye(Kk.shape[0]) - Kk @ Hk) @ Pminus
+        self.P = self.Wx @ (Pminus - Pplus) @ self.Wx + Pplus
 
     def getState(self):
         return self.x, self.P, self.h(self.x)
@@ -483,7 +489,7 @@ def calculateErrorCosts(generator, inputSeries, outputSeries, plotFunc):
             referenceSeries = \
                 inputSeries[generator.mevars[var]["referenceVar"]]
             errorSeries = outputSeries[var].error(referenceSeries)
-            error = errorSeries.rms() / referenceSeries.rms()
+            error = errorSeries.rms() / referenceSeries.averageAbs()
             costFactor = generator.mevars[var]["weight"] * error
             costs[var] = costFactor
             plotFunc([errorSeries])
@@ -491,7 +497,7 @@ def calculateErrorCosts(generator, inputSeries, outputSeries, plotFunc):
     return costs
 
 
-def calculateSmoothnessCosts(generator, inputSeries, outputSeries):
+def calculateSmoothnessCosts(generator, outputSeries):
     costs = {}
     for var in generator.xvars + generator.zvars:
         if var in generator.msvars:
@@ -501,6 +507,20 @@ def calculateSmoothnessCosts(generator, inputSeries, outputSeries):
             costFactor = generator.msvars[var]["weight"] * smoothness
             costs[var] = costFactor
     return costs
+
+
+def calculateExtrapolation(xsSeries, dxsdtSeries, deltatSeries, deltatCatchup):
+    output = np.zeros((xsSeries.numRows(), 2))
+    output[:, 0] = xsSeries.array[:, 0]
+    output[0, 1] = xsSeries.array[0, 1]
+    for i, (xs, dxsdt, deltat) in enumerate(
+            zip(xsSeries.array[:-1, 1],
+                dxsdtSeries.array[:-1, 1],
+                deltatSeries.array[:-1, 1])):
+        dxsdtPred = (xs - output[i, 1]) / deltatCatchup + dxsdt
+        output[i + 1, 1] = output[i, 1] + deltat * dxsdtPred
+    print(output[1000:1020])
+    return output
 
 
 def openKalmanSpec(modelDir):
@@ -514,11 +534,12 @@ def restoreKalmanSpec(spec, varGroup, index, param, value):
 
 
 def manipulateKalmanSpec(spec, varGroup, index, param, change):
-    if varGroup == "zvars" and (param == "initialValue" or param == "initialCovariance"):
+    if varGroup == "zvars" and (param == "initialValue" or param == "initialCovariance" or param == "updateWeight"):
         return None
     var = getattr(spec, varGroup)[index]
     origValue = getattr(var, param)
-    if origValue == 0:
+    newValue = origValue * (1 + change)
+    if origValue == 0 or param == "updateWeight" and (newValue > 1 or newValue < 0):
         return None
     setattr(var, param, origValue * (1 + change))
     return origValue
@@ -542,7 +563,7 @@ def prepareKalmanAnalysis(dataDir, modelDir, outputDir, spec, subdirs=[]):
     return outputDir, model
 
 
-def kalmanAnalysis(dataDir, spec, model, outputDir, generatePlots=False, completeSummary=False):
+def kalmanAnalysis(dataDir, spec, model, outputDir, generatePlots=False, completeSummary=False, deltatCatchup=None):
     # Plotting utils
     def plotSeries(series, outputFileName=None, show=False, **kwargs):
         if not generatePlots:
@@ -625,11 +646,33 @@ def kalmanAnalysis(dataDir, spec, model, outputDir, generatePlots=False, complet
         kalmanOutputSeries[zvar] = series
         plotSeries([series])
 
+    # Simulate the extrapolation algorithm
+    if deltatCatchup is not None:
+        xsExtArray = calculateExtrapolation(
+            inputData["xs"], kalmanOutputSeries[spec.dxsdt], inputData["deltat"], deltatCatchup)
+        xsExt = utils.Series("t", "xs_extrapolation", xsExtArray)
+        xsExtError = xsExt.error(inputData["xs"])
+        dxsdtLowpass = inputData["xs"].derivative().expLowpass(0.05)
+        xsExtLowpassArray = calculateExtrapolation(
+            inputData["xs"], dxsdtLowpass, inputData["deltat"], deltatCatchup)
+        xsExtLowpass = utils.Series("t", "xs_lowpass", xsExtLowpassArray)
+        xsExtLowpassError = xsExtLowpass.error(inputData["xs"])
+        plotSeries([inputData["xs"], xsExt, xsExtLowpass])
+        plotSeries([xsExtError])
+        plotSeries([xsExtLowpassError])
+        plotSeries([inputData["dxsdt"], dxsdtLowpass])
+
+    # Special plots
+    if hasattr(spec, "Ps") and spec.Ps in kalmanOutputSeries:
+        viscocityCurve = kalmanOutputSeries[spec.dxsdt].join(
+            kalmanOutputSeries[spec.Ps])
+        plotSeries([viscocityCurve])
+
     # Calculate costs
     errorCosts = calculateErrorCosts(
         spec.generator, kalmanInputSeries, kalmanOutputSeries, plotSeries)
     smoothnessCosts = calculateSmoothnessCosts(
-        spec.generator, kalmanInputSeries, kalmanOutputSeries)
+        spec.generator, kalmanOutputSeries)
     totalCost = sum(errorCosts.values()) + sum(smoothnessCosts.values())
     if completeSummary:
         print("Total Cost: {}".format(totalCost))
@@ -641,7 +684,12 @@ def kalmanAnalysis(dataDir, spec, model, outputDir, generatePlots=False, complet
             print(" * {}: {:.3f}% ({:.3e})".format(
                 "{}-{}:".format(category, symbol).ljust(24, "."),
                 100 * cost / totalCost, cost))
-    return totalCost
+    if deltatCatchup is not None:
+        xsExtErrorTotal = xsExtError.rms()
+        print("True extrusion RMS error: {}".format(xsExtErrorTotal))
+        return xsExtErrorTotal
+    else:
+        return totalCost
 
 
 if __name__ == "__main__":
@@ -651,18 +699,18 @@ if __name__ == "__main__":
     outputDir, model = prepareKalmanAnalysis(
         args.data_dir, args.model, args.output_dir, spec, subdirs=["original"])
     originalCost = kalmanAnalysis(args.data_dir, spec, model, outputDir,
-                                  generatePlots=not args.no_plots, completeSummary=True)
+                                  generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup)
     if args.command == "optimize":
         for n in range(100):
             costs = []
             outputDir, model = prepareKalmanAnalysis(
                 args.data_dir, args.model, args.output_dir, spec, subdirs=[str(n), "reference"])
             referenceCost = kalmanAnalysis(args.data_dir, spec, model, outputDir,
-                                           generatePlots=not args.no_plots, completeSummary=True)
+                                           generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup)
             for group in ["xvars", "zvars"]:
                 for index, var in enumerate(getattr(spec, group)):
-                    for param in ["initialValue", "initialCovariance", "noise"]:
-                        for direction, change in [("dec", -args.step_size), ("inc", args.step_size)]:
+                    for param in ["initialValue", "initialCovariance", "noise", "updateWeight"]:
+                        for direction, change in [("dec", -args.step_size * np.exp(-n / 20)), ("inc", args.step_size * np.exp(-n / 20))]:
                             address = (group, index, param)
                             origValue = manipulateKalmanSpec(
                                 spec, *address, change)
@@ -674,7 +722,7 @@ if __name__ == "__main__":
                             costs.append((
                                 address,
                                 kalmanAnalysis(args.data_dir, spec, model, outputDir,
-                                               generatePlots=False, completeSummary=False),
+                                               generatePlots=False, completeSummary=False, deltatCatchup=args.deltat_catchup),
                                 change,
                                 origValue))
                             restoreKalmanSpec(spec, *address, origValue)
@@ -686,7 +734,7 @@ if __name__ == "__main__":
                 outputDir, model = prepareKalmanAnalysis(
                     args.data_dir, args.model, args.output_dir, spec, subdirs=[str(n), "optimize", str(index)])
                 newCost = kalmanAnalysis(args.data_dir, spec, model, outputDir,
-                                         generatePlots=False, completeSummary=False)
+                                         generatePlots=False, completeSummary=False, deltatCatchup=args.deltat_catchup)
                 if newCost is None or newCost >= bestCost:
                     restoreKalmanSpec(spec, *address, origValue)
                     break
