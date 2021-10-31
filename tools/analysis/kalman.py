@@ -13,6 +13,8 @@ import numpy as np
 import utils
 
 parser = argparse.ArgumentParser()
+parser.add_argument("--filter-type", type=str,
+                    choices=["ekf", "ukf"], required=True)
 parser.add_argument("--model", type=str, required=True)
 parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
 parser.add_argument("--output-dir", type=str, default=None)
@@ -245,6 +247,7 @@ class KalmanFilterGenerator:
         self.mevars = {}
         self.msvars = {}
         self.mnvars = {}
+        self.params = {}
 
     def addStateTransitionFunc(self, processVar, expr):
         index = self.xvars.index(processVar)
@@ -255,6 +258,9 @@ class KalmanFilterGenerator:
         index = self.zvars.index(measurementVar)
         self.h[index] = expr
         self.dhdx[index] = [expr.partialDerivative(var) for var in self.xvars]
+
+    def addParameter(self, name, value):
+        self.params[name] = value
 
     def addErrorMetric(self, referenceVar, actualVar, weight):
         self.mevars[actualVar] = {
@@ -409,8 +415,15 @@ class KalmanFilterGenerator:
                 "])",
             ]),
             "\n".join([
-                "modelConfig = (packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx)",
-            ])
+                "# Other Parameters",
+                "\n".join(("{} = {}".format(key, value)
+                          for key, value in self.params.items())),
+            ]),
+            "\n".join([
+                "# Model Configurations",
+                "extendedModelConfig = (packingFunc, f, dfdx, h, dhdx, x0, P0, Q, R, Wx)",
+                "unscentedModelConfig = (packingFunc, f, h, x0, P0, Q, R, Wx, alpha, beta, kappa)",
+            ]),
         ])
 
         # Dump source to file
@@ -454,6 +467,62 @@ class ExtendedKalmanFilterState:
         return self.x, self.P, self.h(self.x)
 
 
+class UnscentedKalmanFilterState:
+    def __init__(self, packingFunc, f, h, x0, P0, Q, R, Wx, alpha, beta, kappa):
+        self.packingFunc = packingFunc
+        self.f = f
+        self.h = h
+        self.x = x0
+        self.P = P0
+        self.Q = Q
+        self.R = R
+        self.Wx = Wx
+        self.Wxi = np.eye(self.Wx.shape[0]) - self.Wx
+        self.L = x0.size
+        self.N = 2 * self.L + 1
+        self.Wa = np.zeros((self.N,))
+        self.Wc = np.zeros((self.N,))
+        self.Wa[0] = (alpha**2 * kappa - self.L) / (alpha**2 * kappa)
+        self.Wc[0] = self.Wa[0] + 1 - alpha**2 + beta
+        self.Wa[1:] = 1 / (2 * alpha**2 * kappa)
+        self.Wc[1:] = 1 / (2 * alpha**2 * kappa)
+        self.alpha = alpha
+        self.kappa = kappa
+
+    def generateSigmaPoints(self, x, P):
+        A = np.linalg.cholesky(P)
+        s = [None] * self.N
+        s[0] = np.copy(x)
+        for j in range(self.L):
+            diff = self.alpha * np.sqrt(self.kappa) * \
+                np.column_stack((A[:, j],))
+            s[j + 1] = x + diff
+            s[self.L + j + 1] = x - diff
+        return s
+
+    def evolve(self, data):
+        uk, zk, deltat = self.packingFunc(data)
+        spred = self.generateSigmaPoints(self.x, self.P)
+        x = [self.f(s, uk, deltat) for s in spred]
+        xminus = sum((Wj * x[j] for j, Wj in enumerate(self.Wa)))
+        Pminus = sum((Wj * (x[j] - xminus) @ (x[j] - xminus).T
+                      for j, Wj in enumerate(self.Wc))) + self.Q
+        supdate = self.generateSigmaPoints(xminus, Pminus)
+        z = [self.h(s) for s in supdate]
+        zhat = sum((Wj * z[j] for j, Wj in enumerate(self.Wa)))
+        Sk = sum((Wj * (z[j] - zhat) @ (z[j] - zhat).T
+                 for j, Wj in enumerate(self.Wc))) + self.R
+        Csz = sum((Wj * (supdate[j] - xminus) @ (z[j] - zhat).T
+                  for j, Wj in enumerate(self.Wc)))
+        Kk = Csz @ np.linalg.inv(Sk)
+        self.x = xminus + self.Wx @ Kk @ (zk - zhat)
+        Pplus = Pminus - Kk @ Sk @ Kk.T
+        self.P = self.Wxi @ Pminus @ self.Wxi + self.Wx @ Pplus @ self.Wx
+
+    def getState(self):
+        return self.x, self.P, self.h(self.x)
+
+
 def kalmanProcess(dataMap, state):
     # Check that all data series are the same length
     dataDims = [series.numRows() for series in dataMap.values()]
@@ -470,7 +539,7 @@ def kalmanProcess(dataMap, state):
             if not all((time == times[0] for time in times)):
                 print("Row has different time values")
             state.evolve({key: series.array[i, 1]
-                         for key, series in dataMap.items()})
+                          for key, series in dataMap.items()})
             timeCol.append(times[0])
             x, P, z = state.getState()
             output.append(x.T)
@@ -563,7 +632,7 @@ def prepareKalmanAnalysis(dataDir, modelDir, outputDir, spec, subdirs=[]):
     return outputDir, model
 
 
-def kalmanAnalysis(dataDir, spec, model, outputDir, generatePlots=False, completeSummary=False, deltatCatchup=None):
+def kalmanAnalysis(dataDir, spec, model, outputDir, filterType, generatePlots=False, completeSummary=False, deltatCatchup=None):
     # Plotting utils
     def plotSeries(series, outputFileName=None, show=False, **kwargs):
         if not generatePlots:
@@ -607,7 +676,10 @@ def kalmanAnalysis(dataDir, spec, model, outputDir, generatePlots=False, complet
         plotSeries([deltax_vs_dxsdt])
 
     # Run Kalman filter
-    state = KalmanFilterState(*model.modelConfig)
+    if filterType == "ekf":
+        state = ExtendedKalmanFilterState(*model.extendedModelConfig)
+    elif filterType == "ukf":
+        state = UnscentedKalmanFilterState(*model.unscentedModelConfig)
     kalmanInputSeries = {
         spec.deltat: inputData["deltat"],
         spec.Ph_in: inputData["P"],
@@ -697,15 +769,15 @@ if __name__ == "__main__":
     args = parser.parse_args((sys.argv[1:]))
     spec = openKalmanSpec(args.model)
     outputDir, model = prepareKalmanAnalysis(
-        args.data_dir, args.model, args.output_dir, spec, subdirs=["original"])
-    originalCost = kalmanAnalysis(args.data_dir, spec, model, outputDir,
+        args.data_dir, args.model, args.output_dir, spec, subdirs=[args.filter_type, "original"])
+    originalCost = kalmanAnalysis(args.data_dir, spec, model, outputDir, args.filter_type,
                                   generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup)
     if args.command == "optimize":
         for n in range(100):
             costs = []
             outputDir, model = prepareKalmanAnalysis(
-                args.data_dir, args.model, args.output_dir, spec, subdirs=[str(n), "reference"])
-            referenceCost = kalmanAnalysis(args.data_dir, spec, model, outputDir,
+                args.data_dir, args.model, args.output_dir, spec, subdirs=[args.filter_type, str(n), "reference"])
+            referenceCost = kalmanAnalysis(args.data_dir, spec, model, outputDir, args.filter_type,
                                            generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup)
             for group in ["xvars", "zvars"]:
                 for index, var in enumerate(getattr(spec, group)):
@@ -718,10 +790,10 @@ if __name__ == "__main__":
                                 continue
                             outputDir, model = prepareKalmanAnalysis(
                                 args.data_dir, args.model, args.output_dir, spec,
-                                subdirs=[str(n), str(var), param, direction])
+                                subdirs=[args.filter_type, str(n), str(var), param, direction])
                             costs.append((
                                 address,
-                                kalmanAnalysis(args.data_dir, spec, model, outputDir,
+                                kalmanAnalysis(args.data_dir, spec, model, outputDir, args.filter_type,
                                                generatePlots=False, completeSummary=False, deltatCatchup=args.deltat_catchup),
                                 change,
                                 origValue))
@@ -732,8 +804,8 @@ if __name__ == "__main__":
             for index, (address, cost, change, origValue) in enumerate(costs):
                 manipulateKalmanSpec(spec, *address, change)
                 outputDir, model = prepareKalmanAnalysis(
-                    args.data_dir, args.model, args.output_dir, spec, subdirs=[str(n), "optimize", str(index)])
-                newCost = kalmanAnalysis(args.data_dir, spec, model, outputDir,
+                    args.data_dir, args.model, args.output_dir, spec, subdirs=[args.filter_type, str(n), "optimize", str(index)])
+                newCost = kalmanAnalysis(args.data_dir, spec, model, outputDir, args.filter_type,
                                          generatePlots=False, completeSummary=False, deltatCatchup=args.deltat_catchup)
                 if newCost is None or newCost >= bestCost:
                     restoreKalmanSpec(spec, *address, origValue)
