@@ -3,12 +3,14 @@
 # Copyright 2021 by Daniel Winkelman. All rights reserved.
 
 import argparse
+import datetime
+import re
 import os
 import sys
 from importlib.machinery import SourceFileLoader
-from matplotlib.colors import get_named_colors_mapping
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 import utils
 
@@ -16,14 +18,19 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--filter-type", type=str,
                     choices=["ekf", "ukf"], required=True)
 parser.add_argument("--model", type=str, required=True)
+parser.add_argument("--batch", action="store_true", default=False)
 parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
-parser.add_argument("--output-dir", type=str, default=None)
+parser.add_argument("--data-dir-root", type=str, default=".")
+parser.add_argument("--data-dir-recurse", action="store_true", default=False)
 parser.add_argument("--no-plots", action="store_true", default=False)
 parser.add_argument("--deltat-catchup", type=float, default=1)
 
 subparsers = parser.add_subparsers(dest="command")
+run_parser = subparsers.add_parser("run")
 optimize_parser = subparsers.add_parser("optimize")
 optimize_parser.add_argument("--step-size", type=float, default=0.2)
+
+logFileName = "log-{}".format(datetime.datetime.now().isoformat())
 
 
 class Expression:
@@ -490,7 +497,12 @@ class UnscentedKalmanFilterState:
         self.kappa = kappa
 
     def generateSigmaPoints(self, x, P):
-        A = np.linalg.cholesky(P)
+        while True:
+            try:
+                A = np.linalg.cholesky(P)
+                break
+            except Exception as e:
+                P = utils.nearestPD(P)
         s = [None] * self.N
         s[0] = np.copy(x)
         for j in range(self.L):
@@ -588,13 +600,14 @@ def calculateExtrapolation(xsSeries, dxsdtSeries, deltatSeries, deltatCatchup):
                 deltatSeries.array[:-1, 1])):
         dxsdtPred = (xs - output[i, 1]) / deltatCatchup + dxsdt
         output[i + 1, 1] = output[i, 1] + deltat * dxsdtPred
-    print(output[1000:1020])
     return output
 
 
 def openKalmanSpec(modelDir):
     print("Opening Kalman filter spec {}...".format(modelDir))
     spec = SourceFileLoader("spec", modelDir).load_module()
+    modelName = os.path.splitext(os.path.basename(modelDir))[0]
+    setattr(spec, "modelName", modelName)
     return spec
 
 
@@ -614,31 +627,37 @@ def manipulateKalmanSpec(spec, varGroup, index, param, change):
     return origValue
 
 
-def prepareKalmanAnalysis(dataDir, modelDir, outputDir, spec, subdirs=[]):
-    modelName = os.path.splitext(os.path.basename(modelDir))[0]
-    outputDir = outputDir \
-        if not outputDir is None \
-        else "kalman-{}-{}".format(dataDir, modelName)
-    outputDir = "/".join([outputDir] + subdirs)
-    if not os.path.exists(outputDir):
-        os.makedirs(outputDir)
-    print("Saving output to {}".format(outputDir))
-
-    # Import and compile Kalman Filter
-    modelFileName = "{}/model.py".format(outputDir)
-    spec.generator.generatePython3Functions(modelFileName)
-    model = SourceFileLoader("model", modelFileName).load_module()
-
-    return outputDir, model
+def assembleOutputDirName(dataDir, filterType, modelName, subdirs):
+    dataDirPath = os.path.split(dataDir)
+    return os.path.join(
+        *dataDirPath[:-1],
+        "kalman-{}-{}-{}".format(filterType, dataDirPath[-1], modelName),
+        *subdirs)
 
 
-def kalmanAnalysis(dataDir, spec, model, outputDir, filterType, generatePlots=False, completeSummary=False, deltatCatchup=None):
+def kalmanAnalysis(
+        dataDir, spec, filterType, outputSubdirs=[],
+        generatePlots=False, completeSummary=False, deltatCatchup=None):
+    # Figure out the output directory
+    outputDir = assembleOutputDirName(
+        dataDir, filterType, spec.modelName, outputSubdirs)
+
     # Plotting utils
     def plotSeries(series, outputFileName=None, show=False, **kwargs):
         if not generatePlots:
             return
         utils.plotSeries(series, outputDir=outputDir,
                          outputFileName=outputFileName, show=show, **kwargs)
+
+    # Make sure output directory exists
+    if not os.path.exists(outputDir):
+        os.makedirs(outputDir)
+    print("Saving output to {}".format(outputDir))
+
+    # Compile Kalman filter
+    modelFileName = "{}/model.py".format(outputDir)
+    spec.generator.generatePython3Functions(modelFileName)
+    model = SourceFileLoader("model", modelFileName).load_module()
 
     # Import data
     print("Opening data directory {}...".format(dataDir))
@@ -756,29 +775,99 @@ def kalmanAnalysis(dataDir, spec, model, outputDir, filterType, generatePlots=Fa
             print(" * {}: {:.3f}% ({:.3e})".format(
                 "{}-{}:".format(category, symbol).ljust(24, "."),
                 100 * cost / totalCost, cost))
+    plt.close("all")
     if deltatCatchup is not None:
         xsExtErrorTotal = xsExtError.rms()
         print("True extrusion RMS error: {}".format(xsExtErrorTotal))
-        return xsExtErrorTotal
+        return xsExtErrorTotal, inputData["xe"].numRows()
     else:
-        return totalCost
+        return totalCost, inputData["xe"].numRows()
+
+
+def getDataDirs(args):
+    output = []
+    if args.batch:
+        dataDirRe = re.compile(args.data_dir)
+        for current, folders, files in os.walk(args.data_dir_root):
+            for folder in folders:
+                if dataDirRe.match(folder):
+                    output.append(os.path.join(current, folder))
+            if not args.data_dir_recurse:
+                break
+        output.sort()
+        return output
+    else:
+        if os.path.exists(args.data_dir):
+            return [args.data_dir]
+        else:
+            raise("Data directory \"{}\" does not exist".format(args.data_dir))
+
+
+def analyzeBatch(
+        dataDirs, spec, filterType, outputSubdirs=[],
+        generatePlots=False, completeSummary=False, deltatCatchup=None):
+    # Collect costs and weights for each dataset
+    costs = {}
+    print("Preparing to process:")
+    for dataDir in dataDirs:
+        print(" - {}".format(dataDir))
+
+    # Redirect output to a log file
+    print("Logging to {}...".format(logFileName))
+    oldStdout = sys.stdout
+    oldStderr = sys.stderr
+
+    def printOverride(s):
+        swappedStdout = sys.stdout
+        sys.stdout = oldStdout
+        print(s)
+        sys.stdout = swappedStdout
+
+    with open(logFileName, "a") as logFile:
+        sys.stdout = logFile
+        sys.stderr = logFile
+        for dataDir in dataDirs:
+            cost, weight = kalmanAnalysis(
+                dataDir, spec, filterType, outputSubdirs=outputSubdirs,
+                generatePlots=generatePlots, completeSummary=completeSummary, deltatCatchup=deltatCatchup)
+            printOverride("{} (weight {}): cost is {}".format(
+                dataDir, weight, cost))
+            costs[dataDir] = (cost, weight)
+            if cost is None or np.isnan(cost):
+                break
+
+    sys.stdout = oldStdout
+    sys.stderr = oldStderr
+
+    # Calculate average cost
+    if any((cost is None or np.isnan(cost) for cost, weight in costs.values())):
+        output = np.nan
+    else:
+        weightedCost = sum((cost * weight for cost, weight in costs.values()))
+        totalWeight = sum((weight for cost, weight in costs.values()))
+        output = weightedCost / totalWeight
+    print("Total (average) cost is {}".format(output))
+    return output
 
 
 if __name__ == "__main__":
     # Parse command line args and set up directories
     args = parser.parse_args((sys.argv[1:]))
+    dataDirs = getDataDirs(args)
     spec = openKalmanSpec(args.model)
-    outputDir, model = prepareKalmanAnalysis(
-        args.data_dir, args.model, args.output_dir, spec, subdirs=[args.filter_type, "original"])
-    originalCost = kalmanAnalysis(args.data_dir, spec, model, outputDir, args.filter_type,
-                                  generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup)
-    if args.command == "optimize":
+    if args.command == "run":
+        cost = analyzeBatch(
+            dataDirs, spec, args.filter_type, outputSubdirs=["run"],
+            generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup)
+    elif args.command == "optimize":
         for n in range(100):
             costs = []
-            outputDir, model = prepareKalmanAnalysis(
-                args.data_dir, args.model, args.output_dir, spec, subdirs=[args.filter_type, str(n), "reference"])
-            referenceCost = kalmanAnalysis(args.data_dir, spec, model, outputDir, args.filter_type,
-                                           generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup)
+            print("==== Round {} ====".format(n))
+            print("Running reference ({})...".format(n))
+            referenceCost = analyzeBatch(
+                dataDirs, spec, args.filter_type,
+                outputSubdirs=["opt{}".format(n), "reference"],
+                generatePlots=not args.no_plots, deltatCatchup=args.deltat_catchup)
             for group in ["xvars", "zvars"]:
                 for index, var in enumerate(getattr(spec, group)):
                     for param in ["initialValue", "initialCovariance", "noise", "updateWeight"]:
@@ -788,26 +877,27 @@ if __name__ == "__main__":
                                 spec, *address, change)
                             if origValue is None:
                                 continue
-                            outputDir, model = prepareKalmanAnalysis(
-                                args.data_dir, args.model, args.output_dir, spec,
-                                subdirs=[args.filter_type, str(n), str(var), param, direction])
-                            costs.append((
-                                address,
-                                kalmanAnalysis(args.data_dir, spec, model, outputDir, args.filter_type,
-                                               generatePlots=False, completeSummary=False, deltatCatchup=args.deltat_catchup),
-                                change,
-                                origValue))
+                            label = "{}-{}-{}".format(
+                                str(var), param, direction)
+                            print("Running {} ({})...".format(label, n))
+                            cost = analyzeBatch(
+                                dataDirs, spec, args.filter_type,
+                                outputSubdirs=[
+                                    "opt{}".format(n), "trial", label],
+                                deltatCatchup=args.deltat_catchup)
+                            costs.append((address, cost, change, origValue))
                             restoreKalmanSpec(spec, *address, origValue)
-            costs = list(filter(lambda row: row[1] is not None, costs))
+            costs = list(
+                filter(lambda row: row[1] is not None and not np.isnan(row[1]), costs))
             costs.sort(key=lambda row: row[1])
             bestCost = referenceCost
             for index, (address, cost, change, origValue) in enumerate(costs):
                 manipulateKalmanSpec(spec, *address, change)
-                outputDir, model = prepareKalmanAnalysis(
-                    args.data_dir, args.model, args.output_dir, spec, subdirs=[args.filter_type, str(n), "optimize", str(index)])
-                newCost = kalmanAnalysis(args.data_dir, spec, model, outputDir, args.filter_type,
-                                         generatePlots=False, completeSummary=False, deltatCatchup=args.deltat_catchup)
-                if newCost is None or newCost >= bestCost:
+                newCost = analyzeBatch(
+                    dataDirs, spec, args.filter_type,
+                    ["opt{}".format(n), "optimize", str(index)],
+                    deltatCatchup=args.deltat_catchup)
+                if newCost is None or newCost >= bestCost or np.isnan(newCost):
                     restoreKalmanSpec(spec, *address, origValue)
                     break
                 else:
@@ -816,3 +906,5 @@ if __name__ == "__main__":
                         address, newCost))
             if bestCost == referenceCost:
                 break
+    else:
+        print("Please choose a command")
