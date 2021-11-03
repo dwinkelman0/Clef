@@ -4,6 +4,7 @@
 
 import argparse
 import datetime
+import json
 import re
 import os
 import sys
@@ -14,21 +15,36 @@ import matplotlib.pyplot as plt
 
 import utils
 
+
+def addFilterArgs(parser):
+    parser.add_argument(
+        "--filter-type", type=str, choices=["ekf", "ukf"], required=True)
+    parser.add_argument("--model", type=str, required=True)
+    parser.add_argument("--batch", action="store_true", default=False)
+    parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
+    parser.add_argument("--data-dir-root", type=str, default=".")
+    parser.add_argument(
+        "--data-dir-recurse", action="store_true", default=False)
+    parser.add_argument("--no-plots", action="store_true", default=False)
+    parser.add_argument("--deltat-catchup", type=float, default=1)
+
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--filter-type", type=str,
-                    choices=["ekf", "ukf"], required=True)
-parser.add_argument("--model", type=str, required=True)
-parser.add_argument("--batch", action="store_true", default=False)
-parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
-parser.add_argument("--data-dir-root", type=str, default=".")
-parser.add_argument("--data-dir-recurse", action="store_true", default=False)
-parser.add_argument("--no-plots", action="store_true", default=False)
-parser.add_argument("--deltat-catchup", type=float, default=1)
+parser.add_argument("--disable-logging", action="store_true", default=False)
 
 subparsers = parser.add_subparsers(dest="command")
 run_parser = subparsers.add_parser("run")
+addFilterArgs(run_parser)
 optimize_parser = subparsers.add_parser("optimize")
+addFilterArgs(optimize_parser)
 optimize_parser.add_argument("--step-size", type=float, default=0.2)
+track_params_parser = subparsers.add_parser("track-params")
+track_params_parser.add_argument("--model-dir-root", type=str, required=True)
+track_params_parser.add_argument(
+    "--model-file-regex", type=str, default="summary\\.json")
+track_params_parser.add_argument("--vars", type=str, nargs="+", required=True)
+track_params_parser.add_argument(
+    "--params", type=str, nargs="+", required=True)
 
 logFileName = "log-{}".format(datetime.datetime.now().isoformat())
 
@@ -220,6 +236,16 @@ class ProcessVariable(Expression):
         else:
             return Constant(0)
 
+    def asJson(self, mode):
+        base = {"mode": mode}
+        if mode == "xvar" or mode == "zvar":
+            base["noise"] = self.noise
+            if mode == "xvar":
+                base["initialValue"] = self.initialValue
+                base["initialCovariance"] = self.initialCovariance
+                base["updateWeight"] = self.updateWeight
+        return base
+
     def __repr__(self):
         return self.symbol
 
@@ -280,6 +306,12 @@ class KalmanFilterGenerator:
 
     def addNegativityMetric(self, metricVar, weight):
         self.mnvars[metricVar] = {"weight": weight}
+
+    def generateJsonSpec(self):
+        xvarJson = {str(xvar): xvar.asJson("xvar") for xvar in self.xvars}
+        zvarJson = {str(zvar): zvar.asJson("xvar") for zvar in self.zvars}
+        uvarJson = {str(uvar): uvar.asJson("xvar") for uvar in self.uvars}
+        return {**xvarJson, **zvarJson, **uvarJson}
 
     def generatePython3Functions(self, outputPath):
         def generateUnpackingConditionals(vars, varsArrayName):
@@ -743,7 +775,7 @@ def kalmanAnalysis(
             inputData["xs"], kalmanOutputSeries[spec.dxsdt], inputData["deltat"], deltatCatchup)
         xsExt = utils.Series("t", "xs_extrapolation", xsExtArray)
         xsExtError = xsExt.error(inputData["xs"])
-        dxsdtLowpass = inputData["xs"].derivative().expLowpass(0.05)
+        dxsdtLowpass = inputData["xs"].derivative().expLowpass(0.2)
         xsExtLowpassArray = calculateExtrapolation(
             inputData["xs"], dxsdtLowpass, inputData["deltat"], deltatCatchup)
         xsExtLowpass = utils.Series("t", "xs_lowpass", xsExtLowpassArray)
@@ -776,6 +808,19 @@ def kalmanAnalysis(
                 "{}-{}:".format(category, symbol).ljust(24, "."),
                 100 * cost / totalCost, cost))
     plt.close("all")
+
+    # Save outputs
+    jsonOutput = {
+        "vars": spec.generator.generateJsonSpec(),
+        "metrics": {
+            "error": {str(k): v for k, v in errorCosts.items()},
+            "smoothness": {str(k): v for k, v in smoothnessCosts.items()},
+        },
+        "cost": totalCost,
+    }
+    with open("{}/summary.json".format(outputDir), "w") as outputFile:
+        json.dump(jsonOutput, outputFile, indent=4, sort_keys=True)
+
     if deltatCatchup is not None:
         xsExtErrorTotal = xsExtError.rms()
         print("True extrusion RMS error: {}".format(xsExtErrorTotal))
@@ -805,7 +850,7 @@ def getDataDirs(args):
 
 def analyzeBatch(
         dataDirs, spec, filterType, outputSubdirs=[],
-        generatePlots=False, completeSummary=False, deltatCatchup=None):
+        generatePlots=False, completeSummary=False, deltatCatchup=None, disableLogging=False):
     # Collect costs and weights for each dataset
     costs = {}
     print("Preparing to process:")
@@ -813,19 +858,21 @@ def analyzeBatch(
         print(" - {}".format(dataDir))
 
     # Redirect output to a log file
-    print("Logging to {}...".format(logFileName))
-    oldStdout = sys.stdout
-    oldStderr = sys.stderr
+    if not disableLogging:
+        print("Logging to {}...".format(logFileName))
+        oldStdout = sys.stdout
+        oldStderr = sys.stderr
 
     def printOverride(s):
-        swappedStdout = sys.stdout
-        sys.stdout = oldStdout
-        print(s)
-        sys.stdout = swappedStdout
+        if disableLogging:
+            print(s)
+        else:
+            swappedStdout = sys.stdout
+            sys.stdout = oldStdout
+            print(s)
+            sys.stdout = swappedStdout
 
-    with open(logFileName, "a") as logFile:
-        sys.stdout = logFile
-        sys.stderr = logFile
+    def process():
         for dataDir in dataDirs:
             cost, weight = kalmanAnalysis(
                 dataDir, spec, filterType, outputSubdirs=outputSubdirs,
@@ -836,8 +883,15 @@ def analyzeBatch(
             if cost is None or np.isnan(cost):
                 break
 
-    sys.stdout = oldStdout
-    sys.stderr = oldStderr
+    if disableLogging:
+        process()
+    else:
+        with open(logFileName, "a") as logFile:
+            sys.stdout = logFile
+            sys.stderr = logFile
+            process()
+        sys.stdout = oldStdout
+        sys.stderr = oldStderr
 
     # Calculate average cost
     if any((cost is None or np.isnan(cost) for cost, weight in costs.values())):
@@ -853,12 +907,13 @@ def analyzeBatch(
 if __name__ == "__main__":
     # Parse command line args and set up directories
     args = parser.parse_args((sys.argv[1:]))
-    dataDirs = getDataDirs(args)
-    spec = openKalmanSpec(args.model)
+    if args.command == "run" or args.command == "optimize":
+        dataDirs = getDataDirs(args)
+        spec = openKalmanSpec(args.model)
     if args.command == "run":
         cost = analyzeBatch(
             dataDirs, spec, args.filter_type, outputSubdirs=["run"],
-            generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup)
+            generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup, disableLogging=args.disable_logging)
     elif args.command == "optimize":
         for n in range(100):
             costs = []
@@ -867,7 +922,7 @@ if __name__ == "__main__":
             referenceCost = analyzeBatch(
                 dataDirs, spec, args.filter_type,
                 outputSubdirs=["opt{}".format(n), "reference"],
-                generatePlots=not args.no_plots, deltatCatchup=args.deltat_catchup)
+                generatePlots=not args.no_plots, deltatCatchup=args.deltat_catchup, disableLogging=args.disable_logging)
             for group in ["xvars", "zvars"]:
                 for index, var in enumerate(getattr(spec, group)):
                     for param in ["initialValue", "initialCovariance", "noise", "updateWeight"]:
@@ -884,7 +939,7 @@ if __name__ == "__main__":
                                 dataDirs, spec, args.filter_type,
                                 outputSubdirs=[
                                     "opt{}".format(n), "trial", label],
-                                deltatCatchup=args.deltat_catchup)
+                                deltatCatchup=args.deltat_catchup, disableLogging=args.disable_logging)
                             costs.append((address, cost, change, origValue))
                             restoreKalmanSpec(spec, *address, origValue)
             costs = list(
@@ -896,7 +951,7 @@ if __name__ == "__main__":
                 newCost = analyzeBatch(
                     dataDirs, spec, args.filter_type,
                     ["opt{}".format(n), "optimize", str(index)],
-                    deltatCatchup=args.deltat_catchup)
+                    deltatCatchup=args.deltat_catchup, disableLogging=args.disable_logging)
                 if newCost is None or newCost >= bestCost or np.isnan(newCost):
                     restoreKalmanSpec(spec, *address, origValue)
                     break
@@ -906,5 +961,34 @@ if __name__ == "__main__":
                         address, newCost))
             if bestCost == referenceCost:
                 break
+    elif args.command == "track-params":
+        modelFileRe = re.compile(args.model_file_regex)
+        dataPoints = {}
+        allVars = len(args.vars) == 1 and args.vars[0] == "all"
+        allParams = len(args.params) == 1 and args.params[0] == "all"
+        for current, folders, files in os.walk(args.model_dir_root):
+            for file in files:
+                if modelFileRe.match(file):
+                    with open(os.path.join(current, file)) as inputFile:
+                        jsonInput = json.load(inputFile)
+                        for var in jsonInput["vars"]:
+                            if allVars or var in args.vars:
+                                if not var in dataPoints:
+                                    dataPoints[var] = {}
+                                for param in jsonInput["vars"][var]:
+                                    if param != "mode" and (allParams or param in args.params):
+                                        if not param in dataPoints[var]:
+                                            dataPoints[var][param] = []
+                                        dataPoints[var][param].append(
+                                            (jsonInput["vars"][var][param], jsonInput["cost"]))
+        outputDir = os.path.join(args.model_dir_root, "param_tracking")
+        if not os.path.exists(outputDir):
+            os.mkdir(outputDir)
+        for var, nested in dataPoints.items():
+            for param, data in nested.items():
+                data.sort(key=lambda row: row[0])
+                series = utils.Series(
+                    "{}_{}".format(var, param), "cost", np.array(data))
+                utils.plotHistogramAndAverages(series, outputDir)
     else:
         print("Please choose a command")

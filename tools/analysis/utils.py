@@ -248,3 +248,29 @@ def plotSeries(series, outputDir, outputFileName=None, show=False, **kwargs):
     plt.title(outputDir)
     plt.savefig(outputDir)
     plt.clf()
+
+
+def plotHistogramAndAverages(series, outputDir, outputFileName=None, show=False, **kwargs):
+    # Come up with a file name
+    if outputFileName is None:
+        outputFileName = "hist-{}-vs-{}.png".format(series.ind, series.dep)
+    outputDir = "{}/{}".format(outputDir, outputFileName)
+
+    print("Plot {} Histogram -> \"{}\"".format(str(series), outputDir))
+
+    plt.figure(dpi=200)
+    fig, (ax1, ax2) = plt.subplots(2)
+    bins, _, _ = ax2.hist(series.array[:, 0], bins=10)
+    total = 0
+    averagesInd = []
+    averagesDep = []
+    for b in bins:
+        if b > 0:
+            averagesInd.append(
+                "{:.2e}".format(sum(series.array[int(total):int(total+b), 0]) / b))
+            averagesDep.append(series.array[int(total):int(total+b), 1])
+            total += b
+    ax1.boxplot(averagesDep, labels=averagesInd)
+    ax1.set_yscale("log")
+    fig.savefig(outputDir)
+    plt.clf()
