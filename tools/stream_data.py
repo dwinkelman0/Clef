@@ -5,6 +5,7 @@
 import argparse
 import datetime
 import os
+from pickle import dump
 import serial
 import sys
 import time
@@ -24,6 +25,7 @@ parser.add_argument("--baud", type=int, default=57600)
 parser.add_argument("--output-dir", type=str, default="data-{}".format(
     datetime.datetime.now().isoformat()))
 parser.add_argument("--time", type=int, default=0)
+parser.add_argument("--stdout", action="store_true", default=False)
 
 
 def parseDatapoint(datapoint):
@@ -31,9 +33,8 @@ def parseDatapoint(datapoint):
     return parts[0], int(parts[1])
 
 
-def collect(dirname, port, baud, runtime):
+def collect(dirname, port, baud, runtime, dumpToStdout):
     data = {}
-    count = 0
 
     ser = serial.Serial(port, baud, timeout=1)
     time.sleep(2)
@@ -46,15 +47,16 @@ def collect(dirname, port, baud, runtime):
                 data = {}
                 continue
             if VALID_LINE_RE.match(message) is None:
-                if message[0] == ";":
+                if len(message) > 0 and message[0] == ";":
                     print("Comment: {}".format(message))
                     continue
             datapoints = DATAPOINT_RE.findall(message)
-            if parseDatapoint(datapoints[0])[0] != "t":
+            if len(datapoints) == 0 or parseDatapoint(datapoints[0])[0] != "t":
                 continue
+            if dumpToStdout:
+                print(datapoints)
             t = parseDatapoint(datapoints[0])[1]
             for datapoint in datapoints[1:]:
-                count += 1
                 name, value = parseDatapoint(datapoint)
                 if name == "t":
                     continue
@@ -62,6 +64,7 @@ def collect(dirname, port, baud, runtime):
                     data[name] = []
                 array = data[name]
                 array.append((t, value))
+                count = sum(map(len, data.values()))
                 if count % 100 == 0:
                     print("Collected {} samples".format(count))
     except KeyboardInterrupt:
@@ -77,4 +80,4 @@ def collect(dirname, port, baud, runtime):
 
 if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
-    collect(args.output_dir, args.port, args.baud, args.time)
+    collect(args.output_dir, args.port, args.baud, args.time, args.stdout)
