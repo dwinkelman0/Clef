@@ -157,7 +157,7 @@ int main() {
     if (newQueueSize != currentQueueSize) {
       char buffer[64];
       sprintf(buffer, ";Queue size = %d", newQueueSize);
-      Clef::Impl::Atmega2560::serial1.writeLine(buffer);
+      Clef::Impl::Atmega2560::serial.writeLine(buffer);
       currentQueueSize = newQueueSize;
     }
   }

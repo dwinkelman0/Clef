@@ -219,8 +219,8 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
         float P = pressureSensor_.readPressure();
         predictor_.evolve(t, xe, xs, dxsdt, P);
 
-        this->setTargetPosition(predictor_.determineExtruderTargetPosition());
-        this->setFeedrate(predictor_.determineExtruderFeedrate());
+        //this->setTargetPosition(predictor_.determineExtruderTargetPosition());
+        //this->setFeedrate(predictor_.determineExtruderFeedrate());
         xyFeedrate = predictor_.determineXYFeedrate(
             *XYEPosition::XAxis::gcodePositionToStepper(startPosition.x),
             *XYEPosition::YAxis::gcodePositionToStepper(startPosition.y),
@@ -258,6 +258,7 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
   void setExtrusionEndpoint(
       const typename Axis<USTEPS_PER_MM>::GcodePosition position) {
     predictor_.setEndpoint(*this->gcodePositionToStepper(position));
+    this->setTargetPosition(position);
   }
 
   typename Axis<USTEPS_PER_MM>::GcodePosition getExtrusionEndpoint() const {
@@ -311,12 +312,11 @@ class Axes : public Clef::Util::Initialized {
    * Set the XY position and feedrate.
    */
   void setXyParams(const XYEPosition &startPosition,
-                   const XYEPosition &endPosition,
-                   const XAxis::GcodeFeedrate feedrateMmsPerMin) {
+                   const XYEPosition &endPosition) {
     const XYEPosition difference = endPosition - startPosition;
     const float magnitude = difference.getXyMagnitude();
-    getX().setFeedrate(feedrateMmsPerMin * fabs(*difference.x / magnitude));
-    getY().setFeedrate(feedrateMmsPerMin * fabs(*difference.y / magnitude));
+    getX().setFeedrate(getFeedrate() * fabs(*difference.x / magnitude));
+    getY().setFeedrate(getFeedrate() * fabs(*difference.y / magnitude));
     getX().setTargetPosition(endPosition.x);
     getY().setTargetPosition(endPosition.y);
   }

@@ -2,6 +2,8 @@
 
 #include "Action.h"
 
+#include <stdio.h>
+
 namespace Clef::Fw {
 namespace Action {
 Action::Action(const Type type, const XYZEPosition &startPosition)
@@ -24,7 +26,7 @@ MoveXY::MoveXY(const XYZEPosition &startPosition,
 void MoveXY::onStart(Context &context) {
   context.axes.setXyParams(
       context.actionQueue.getStartPosition().asXyePosition(),
-      getEndPosition().asXyePosition(), context.axes.getFeedrate());
+      getEndPosition().asXyePosition());
 }
 
 bool MoveXY::isFinished(const Context &context) const {
@@ -65,6 +67,7 @@ bool MoveXYE::pushPoint(Context &context,
   tempEndPosition.e = endPositionE;
   if (tempEndPosition != getEndPosition()) {
     // Require that the point be distinct to prevent division by zero
+    // TODO: move this functionality to the parser?
     bool output =
         context.xyePositionQueue.push(tempEndPosition.asXyePosition());
     if (output) {
@@ -96,8 +99,9 @@ void MoveXYE::onStart(Context &context) {
   XYEPosition segmentEndPosition = *context.xyePositionQueue.first();
   XYEPosition startPosition = segmentStart_;
 
-  context.axes.setXyParams(startPosition, segmentEndPosition, 1.0f);
+  context.axes.setXyParams(startPosition, segmentEndPosition);
   context.axes.getE().beginExtrusion();
+  context.axes.getE().setFeedrate(200.0f);
   context.axes.getE().setExtrusionEndpoint(getEndPosition().e);
 }
 
@@ -114,8 +118,7 @@ void MoveXYE::onLoop(Context &context) {
       numPointsCompleted_++;
       if (numPointsCompleted_ < numPointsPushed_) {
         XYEPosition endPosition = *context.xyePositionQueue.first();
-        context.axes.setXyParams(segmentStart_, endPosition,
-                                 context.axes.getFeedrate());
+        context.axes.setXyParams(segmentStart_, endPosition);
       }
     }
   }
