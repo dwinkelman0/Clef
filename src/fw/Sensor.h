@@ -42,6 +42,17 @@ class Sensor {
         staged_({0, 0}) {}
 
   /**
+   * Register a subscriber. Return a token that can be used when checking out
+   * and releasing.
+   */
+  uint8_t subscribe() {
+    uint8_t nextActiveSubsribers = (activeSubscribers_ << 1) | 1;
+    uint8_t token = nextActiveSubsribers ^ activeSubscribers_;
+    activeSubscribers_ = nextActiveSubsribers;
+    return token;
+  }
+
+  /**
    * Provide a data point from an external source.
    */
   void inject(DType data) {
@@ -51,11 +62,11 @@ class Sensor {
       case State::NO_DATA:
         current_ = dataPoint;
         state_ = State::DATA_READY;
-        onCurrentUpdate(current_);
+        onNewDataLoad();
         break;
       case State::DATA_READY:
         current_ = dataPoint;
-        onCurrentUpdate(current_);
+        onNewDataLoad();
         break;
       case State::CHECKED_OUT:
         staged_ = dataPoint;
@@ -70,12 +81,29 @@ class Sensor {
   /**
    * Transition the sensor to a state in which it is safe to read.
    */
-  bool checkOut() {
+  bool checkOut(const uint8_t token) {
     Clef::If::DisableInterrupts noInterrupts;
     switch (state_) {
+      case State::NO_DATA:
+        return false;
       case State::DATA_READY:
-        state_ = State::CHECKED_OUT;
-        return true;
+        if (~checkedOutSubscribers_ & token) {
+          // Allow checkout only if this token has not already been used
+          state_ = State::CHECKED_OUT;
+          checkedOutSubscribers_ |= token;
+          return true;
+        } else {
+          return false;
+        }
+      case State::CHECKED_OUT:
+      case State::CHECKED_OUT_AND_STAGED:
+        if (~checkedOutSubscribers_ & token) {
+          // Allow checkout only if this token has not already been used
+          checkedOutSubscribers_ |= token;
+          return true;
+        } else {
+          return false;
+        }
       default:
         return false;
     }
@@ -85,16 +113,31 @@ class Sensor {
    * Transition the sensor out of the state in which it is safe to read so that
    * the readable data can be refreshed.
    */
-  void release() {
+  void release(const uint8_t token) {
     Clef::If::DisableInterrupts noInterrupts;
     switch (state_) {
       case State::CHECKED_OUT:
-        state_ = State::NO_DATA;
+        releasedSubscribers_ |= token;
+        if (releasedSubscribers_ == activeSubscribers_) {
+          // If all subscribers have seen the data, throw out
+          state_ = State::NO_DATA;
+        } else if (releasedSubscribers_ == checkedOutSubscribers_) {
+          // If not all subscribers have seen the data but none are actively
+          // looking, go back to DATA_READY
+          state_ = State::DATA_READY;
+        }
+        // If there are still subscribers looking at the data, do nothing
         break;
       case State::CHECKED_OUT_AND_STAGED:
-        current_ = staged_;
-        state_ = State::DATA_READY;
-        onCurrentUpdate(current_);
+        releasedSubscribers_ |= token;
+        if (releasedSubscribers_ == checkedOutSubscribers_) {
+          // If not all subscribers have seen the data but none are actively
+          // looking, load the new data
+          current_ = staged_;
+          state_ = State::DATA_READY;
+          onNewDataLoad();
+        }
+        // If there are still subscribers looking at the data, do nothing
         break;
       default:
         break;
@@ -113,8 +156,17 @@ class Sensor {
   DataPoint read() const { return current_; }
 
  private:
+  void onNewDataLoad() {
+    checkedOutSubscribers_ = 0;
+    releasedSubscribers_ = 0;
+    onCurrentUpdate(current_);
+  }
+
   Clef::If::Clock &clock_;
   State state_;
+  uint8_t activeSubscribers_;
+  uint8_t checkedOutSubscribers_;
+  uint8_t releasedSubscribers_;
   DataPoint current_;
   DataPoint staged_;
 };

@@ -62,9 +62,10 @@ void extruderStatus(void *arg) {
   }
 }
 
-void checkSensors() {
-  if (displacementSensor.checkOut()) {
-    if (pressureSensor.checkOut()) {
+void checkSensors(const uint8_t displacementSensorToken,
+                  const uint8_t pressureSensorToken) {
+  if (displacementSensor.checkOut(displacementSensorToken)) {
+    if (pressureSensor.checkOut(pressureSensorToken)) {
       typename Clef::Fw::Axes::EAxis::StepperPosition extruderPosition =
           axes.getE().getPosition();
       Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
@@ -83,9 +84,9 @@ void checkSensors() {
       Clef::Impl::Atmega2560::serial1.writeStr(buffer);
       sprintf(buffer, ",P=%ld", static_cast<int32_t>(pressure));
       Clef::Impl::Atmega2560::serial1.writeLine(buffer);
-      pressureSensor.release();
+      pressureSensor.release(pressureSensorToken);
     }
-    displacementSensor.release();
+    displacementSensor.release(displacementSensorToken);
   }
 }
 
@@ -125,10 +126,12 @@ int main() {
       Clef::Fw::DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT,
                                    USTEPS_PER_MM_E>::injectWrapper,
       &displacementSensor);
+  uint8_t displacementSensorToken = displacementSensor.subscribe();
 
   Clef::Impl::Atmega2560::spi.init();
   Clef::Impl::Atmega2560::spi.setReadCompleteCallback(
       Clef::Fw::PressureSensor::injectWrapper, &pressureSensor);
+  uint8_t pressureSensorToken = pressureSensor.subscribe();
 
   Clef::Impl::Atmega2560::timer1.init();
   Clef::Impl::Atmega2560::timer1.setFrequency(100.0f);
@@ -139,7 +142,7 @@ int main() {
   int currentQueueSize = actionQueue.size();
   while (1) {
     gcodeParser.ingest(context);
-    checkSensors();
+    checkSensors(displacementSensorToken, pressureSensorToken);
     if (it) {
       (*it)->onLoop(context);
       if ((*it)->isFinished(context)) {

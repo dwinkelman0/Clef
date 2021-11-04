@@ -191,7 +191,10 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
         displacementSensor_(displacementSensor),
         pressureSensor_(pressureSensor),
         predictor_(predictor),
-        displacementSensorOffset_(0.0f) {}
+        displacementSensorOffset_(0.0f) {
+    displacementSensorToken_ = displacementSensor_.subscribe();
+    pressureSensorToken_ = pressureSensor_.subscribe();
+  }
 
   /**
    * Set the amount by which the displacement sensor and axis differ. This
@@ -210,8 +213,8 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
                  const XYEPosition &endPosition,
                  const XYEPosition &currentPosition) {
     float xyFeedrate = 0.0f;
-    if (displacementSensor_.checkOut()) {
-      if (pressureSensor_.checkOut()) {
+    if (displacementSensor_.checkOut(displacementSensorToken_)) {
+      if (pressureSensor_.checkOut(pressureSensorToken_)) {
         float t = *pressureSensor_.getMeasurementTime();
         float xe = *this->stepper_.getPosition();
         float xs = *displacementSensor_.readPosition();
@@ -231,9 +234,9 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
             *XYEPosition::XAxis::gcodePositionToStepper(currentPosition.x),
             *XYEPosition::YAxis::gcodePositionToStepper(currentPosition.y));
 
-        pressureSensor_.release();
+        pressureSensor_.release(pressureSensorToken_);
       }
-      displacementSensor_.release();
+      displacementSensor_.release(displacementSensorToken_);
     }
     return xyFeedrate;
   }
@@ -268,7 +271,9 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
  private:
   Clef::Fw::DisplacementSensor<SENSOR_USTEPS_PER_MM, USTEPS_PER_MM>
       &displacementSensor_;
+  uint8_t displacementSensorToken_;
   Clef::Fw::PressureSensor &pressureSensor_;
+  uint8_t pressureSensorToken_;
   Clef::Fw::ExtrusionPredictor &predictor_;
 
   typename Axis<USTEPS_PER_MM>::StepperPosition
