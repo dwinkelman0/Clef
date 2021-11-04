@@ -63,6 +63,13 @@ std::string Serial::extract() {
   std::unique_lock<std::mutex> lock(*globalMutex_);
   std::string output;
   while (outputStream_.size() > 0) {
+    // Strip comments
+    if (outputStream_.front() == ';') {
+      while (outputStream_.size() > 0 && outputStream_.front() != '\n') {
+        outputStream_.pop();
+      }
+      outputStream_.pop();
+    }
     output.push_back(outputStream_.front());
     outputStream_.pop();
   }

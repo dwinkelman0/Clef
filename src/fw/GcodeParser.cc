@@ -232,11 +232,13 @@ bool GcodeParser::handleG1(Context &context, const uint16_t errorBufferSize,
         // If the last action in the queue is MoveXYE and the extrusion
         // destination is in the same direction as the current extrusion,
         // coalesce
+        context.serial.writeLine(";Push XYE point");
         static_cast<Action::MoveXYE *>(*lastAction)
             ->pushPoint(context, hasX ? &xMms : nullptr, hasY ? &yMms : nullptr,
                         eMms);
       } else {
         // Otherwise, start a new MoveXYE
+        context.serial.writeLine(";Push XYE fresh");
         Action::MoveXYE moveXye(context.actionQueue.getEndPosition());
         moveXye.pushPoint(context, hasX ? &xMms : nullptr,
                           hasY ? &yMms : nullptr, eMms);
