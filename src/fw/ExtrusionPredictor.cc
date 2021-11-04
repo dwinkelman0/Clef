@@ -56,7 +56,7 @@ float LinearExtrusionPredictor::determineXYFeedrate(
   float xyTotal = sqrt((endX - startX) * (endX - startX) +
                        (endY - startY) * (endY - startY));
   float xyRatio = xyProgress / xyTotal;
-  float eProgress = fabs(xs_ - (startE - xe0_));
+  float eProgress = xs_ - (startE - xe0_);
   float eTotal = fabs(endE - startE);
   float eRatio = eProgress / eTotal;
   float xyLag = xyTotal * (eRatio - xyRatio);

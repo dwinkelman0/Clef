@@ -25,6 +25,9 @@ class Axis : public Clef::Util::Initialized {
   using GcodeFeedrate =
       Clef::Util::Feedrate<float, Clef::Util::PositionUnit::MM,
                            Clef::Util::TimeUnit::MIN, USTEPS_PER_MM>;
+  using UstepFeedrate =
+      Clef::Util::Feedrate<float, Clef::Util::PositionUnit::USTEP,
+                           Clef::Util::TimeUnit::MIN, USTEPS_PER_MM>;
 
   Axis(Clef::If::Stepper<USTEPS_PER_MM> &stepper, Clef::If::PwmTimer &pwmTimer)
       : stepper_(stepper), pwmTimer_(pwmTimer) {}
@@ -201,7 +204,9 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
    * should be done during global firmware initialization and homing.
    */
   void setDisplacementSensorOffset(
-      const typename Axis<USTEPS_PER_MM>::StepperPosition offset) {
+      const typename Axis<USTEPS_PER_MM>::template Position<
+          float, Clef::Util::PositionUnit::USTEP>
+          offset) {
     displacementSensorOffset_ = offset;
   }
 
@@ -209,12 +214,13 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
    * If there is new sensor data, handle feedrate throttling. Returns the
    * feedrate at which the XY axes should operate.
    */
-  float throttle(const XYEPosition &startPosition,
-                 const XYEPosition &endPosition,
-                 const XYEPosition &currentPosition) {
-    float xyFeedrate = 0.0f;
+  bool throttle(const XYEPosition &startPosition,
+                const XYEPosition &endPosition,
+                const XYEPosition &currentPosition, float *xyFeedrate) {
+    bool hasNewData = false;
     if (displacementSensor_.checkOut(displacementSensorToken_)) {
       if (pressureSensor_.checkOut(pressureSensorToken_)) {
+        hasNewData = true;
         float t = *pressureSensor_.getMeasurementTime();
         float xe = *this->stepper_.getPosition();
         float xs = *displacementSensor_.readPosition();
@@ -222,9 +228,9 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
         float P = pressureSensor_.readPressure();
         predictor_.evolve(t, xe, xs, dxsdt, P);
 
-        //this->setTargetPosition(predictor_.determineExtruderTargetPosition());
-        //this->setFeedrate(predictor_.determineExtruderFeedrate());
-        xyFeedrate = predictor_.determineXYFeedrate(
+        // this->setTargetPosition(predictor_.determineExtruderTargetPosition());
+        // this->setFeedrate(predictor_.determineExtruderFeedrate());
+        *xyFeedrate = predictor_.determineXYFeedrate(
             *XYEPosition::XAxis::gcodePositionToStepper(startPosition.x),
             *XYEPosition::YAxis::gcodePositionToStepper(startPosition.y),
             *XYEPosition::EAxis::gcodePositionToStepper(startPosition.e),
@@ -238,14 +244,14 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
       }
       displacementSensor_.release(displacementSensorToken_);
     }
-    return xyFeedrate;
+    return hasNewData;
   }
 
   void beginExtrusion() {
     typename Axis<USTEPS_PER_MM>::StepperPosition stepperPosition =
         *this->stepper_.getPosition();
     predictor_.reset(*stepperPosition,
-                     *(stepperPosition + displacementSensorOffset_));
+                     *stepperPosition + *displacementSensorOffset_);
   }
 
   /**
@@ -276,7 +282,8 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
   uint8_t pressureSensorToken_;
   Clef::Fw::ExtrusionPredictor &predictor_;
 
-  typename Axis<USTEPS_PER_MM>::StepperPosition
+  typename Axis<USTEPS_PER_MM>::template Position<
+      float, Clef::Util::PositionUnit::USTEP>
       displacementSensorOffset_; /*!< Subtract this quantity from xs to get the
                                     corresponding value of xe. */
 };

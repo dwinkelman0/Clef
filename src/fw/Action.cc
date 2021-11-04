@@ -99,9 +99,10 @@ void MoveXYE::onStart(Context &context) {
   XYEPosition segmentEndPosition = *context.xyePositionQueue.first();
   XYEPosition startPosition = segmentStart_;
 
+  context.axes.setFeedrate(1.0f);
   context.axes.setXyParams(startPosition, segmentEndPosition);
   context.axes.getE().beginExtrusion();
-  context.axes.getE().setFeedrate(200.0f);
+  context.axes.getE().setFeedrate(20.0f);
   context.axes.getE().setExtrusionEndpoint(getEndPosition().e);
 }
 
@@ -123,9 +124,21 @@ void MoveXYE::onLoop(Context &context) {
     }
   }
   if (context.xyePositionQueue.first()) {
-    context.axes.getE().throttle(
-        segmentStart_, *context.xyePositionQueue.first(),
-        context.axes.getCurrentPosition().asXyePosition());
+    XYEPosition endPosition = *context.xyePositionQueue.first();
+    float newFeedrate;
+    if (context.axes.getE().throttle(
+            segmentStart_, *context.xyePositionQueue.first(),
+            context.axes.getCurrentPosition().asXyePosition(), &newFeedrate)) {
+      typename Axes::XAxis::UstepFeedrate ustepFeedrate(newFeedrate);
+      context.axes.setFeedrate(ustepFeedrate);
+      context.axes.setXyParams(segmentStart_, endPosition);
+
+      char buffer[64];
+      sprintf(buffer, ";xy feedrate = %d",
+              static_cast<int32_t>(
+                  *typename Axes::XAxis::GcodeFeedrate(ustepFeedrate)));
+      context.serial.writeLine(buffer);
+    }
   }
 }
 

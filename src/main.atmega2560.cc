@@ -65,6 +65,11 @@ void extruderStatus(void *arg) {
 void checkSensors(const uint8_t displacementSensorToken,
                   const uint8_t pressureSensorToken) {
   if (displacementSensor.checkOut(displacementSensorToken)) {
+    static bool initializedExtruder = false;
+    if (!initializedExtruder) {
+      eAxis.setDisplacementSensorOffset(displacementSensor.readPosition());
+      initializedExtruder = true;
+    }
     if (pressureSensor.checkOut(pressureSensorToken)) {
       typename Clef::Fw::Axes::EAxis::StepperPosition extruderPosition =
           axes.getE().getPosition();
