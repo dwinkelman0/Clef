@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 
+#include <iostream>
+
 namespace Clef::Util {
 template <uint16_t R, uint16_t C, bool T>
 class BaseMatrix {
@@ -136,6 +138,99 @@ void sub(const BaseMatrix<M, N, T1> &left, const BaseMatrix<M, N, T2> &right,
       output.set(r, c, left.get(r, c) - right.get(r, c));
     }
   }
+}
+
+namespace {
+/**
+ * @brief Substep in Gauss-Jordan elimination inverse matrix algorithm. Scratch
+ * becomes an upper-triangular matrix with identity diagonal, and output becomes
+ * a lower-triangular matrix
+ *
+ * @param scratch
+ * @param output
+ */
+template <uint16_t N, bool T1, bool T2>
+void triangularSwap(BaseWritableMatrix<N, N, T1> &scratch,
+                    BaseWritableMatrix<N, N, T2> &output) {
+  for (int c = 0; c < N; ++c) {
+    // Normalize the row
+    float diag = scratch.get(c, c);
+    for (int r = c + 1; r < N && diag == 0; ++r) {
+      // May need to do swaps if one of the diagonal elements is zero
+      for (int j = 0; j < N; ++j) {
+        float temp = output.get(c, j);
+        output.set(c, j, output.get(r, j));
+        output.set(r, j, temp);
+      }
+      for (int j = c; j < N; ++j) {
+        float temp = scratch.get(c, j);
+        scratch.set(c, j, scratch.get(r, j));
+        scratch.set(r, j, temp);
+      }
+      diag = scratch.get(c, c);
+    }
+    for (int j = 0; j < N; ++j) {
+      output.set(c, j, output.get(c, j) / diag);
+    }
+    for (int j = c; j < N; ++j) {
+      scratch.set(c, j, scratch.get(c, j) / diag);
+    }
+
+    // Subtract the row from all lower rows
+    for (int r = c + 1; r < N; ++r) {
+      float factor = scratch.get(r, c);
+      for (int j = 0; j < N; ++j) {
+        output.set(r, j, output.get(r, j) - output.get(c, j) * factor);
+      }
+      for (int j = c; j < N; ++j) {
+        scratch.set(r, j, scratch.get(r, j) - scratch.get(c, j) * factor);
+      }
+    }
+  }
+}
+
+template <uint16_t N, bool T>
+void rowMirror(BaseWritableMatrix<N, N, T> &mat) {
+  for (int r = 0; r < N / 2; ++r) {
+    for (int c = 0; c < N; ++c) {
+      float temp = mat.get(r, c);
+      mat.set(r, c, mat.get(N - r - 1, c));
+      mat.set(N - r - 1, c, temp);
+    }
+  }
+}
+
+template <uint16_t N, bool T>
+void columnMirror(BaseWritableMatrix<N, N, T> &mat) {
+  for (int r = 0; r < N; ++r) {
+    for (int c = 0; c < N / 2; ++c) {
+      float temp = mat.get(r, c);
+      mat.set(r, c, mat.get(r, N - c - 1));
+      mat.set(r, N - c - 1, temp);
+    }
+  }
+}
+}  // namespace
+
+template <uint16_t N, bool T>
+void inverse(const BaseMatrix<N, N, T> &mat, RamMatrix<N, N> &output,
+             RamMatrix<N, N> &scratch) {
+  for (int r = 0; r < N; ++r) {
+    for (int c = 0; c < N; ++c) {
+      output.set(r, c, r == c ? 1 : 0);
+      scratch.set(r, c, mat.get(r, c));
+    }
+  }
+
+  // TODO: This is a lazy approach and may be worth reworking
+  triangularSwap(scratch, output);
+  columnMirror(scratch);
+  columnMirror(output);
+  rowMirror(scratch);
+  rowMirror(output);
+  triangularSwap(scratch, output);
+  columnMirror(output);
+  rowMirror(output);
 }
 }  // namespace Matrix
 }  // namespace Clef::Util
