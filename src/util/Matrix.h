@@ -4,8 +4,6 @@
 
 #include <stdint.h>
 
-#include <iostream>
-
 namespace Clef::Util {
 template <uint16_t R, uint16_t C, bool T>
 class BaseMatrix {
@@ -149,9 +147,8 @@ namespace {
  * @param scratch
  * @param output
  */
-template <uint16_t N, bool T1, bool T2>
-void triangularSwap(BaseWritableMatrix<N, N, T1> &scratch,
-                    BaseWritableMatrix<N, N, T2> &output) {
+template <uint16_t N>
+void triangularSwap(RamMatrix<N, N> &scratch, RamMatrix<N, N> &output) {
   for (int c = 0; c < N; ++c) {
     // Normalize the row
     float diag = scratch.get(c, c);
@@ -212,6 +209,36 @@ void columnMirror(BaseWritableMatrix<N, N, T> &mat) {
 }
 }  // namespace
 
+/**
+ * @brief Destructive variant of matrix inversion using the Gauss-Jordan
+ * elimination algorithm.
+ *
+ * @tparam N
+ * @param mat Input matrix; this is overwritten.
+ * @param output Output matrix.
+ */
+template <uint16_t N>
+void inverse(RamMatrix<N, N> &mat, RamMatrix<N, N> &output) {
+  // TODO: This is a lazy approach and may be worth reworking
+  triangularSwap(mat, output);
+  columnMirror(mat);
+  columnMirror(output);
+  rowMirror(mat);
+  rowMirror(output);
+  triangularSwap(mat, output);
+  columnMirror(output);
+  rowMirror(output);
+}
+
+/**
+ * @brief Non-destructive variant of matrix inversion.
+ *
+ * @tparam N
+ * @tparam T
+ * @param mat Input matrix; this is not touched.
+ * @param output Output matrix.
+ * @param scratch Scratch space used for the calculation.
+ */
 template <uint16_t N, bool T>
 void inverse(const BaseMatrix<N, N, T> &mat, RamMatrix<N, N> &output,
              RamMatrix<N, N> &scratch) {
@@ -221,16 +248,16 @@ void inverse(const BaseMatrix<N, N, T> &mat, RamMatrix<N, N> &output,
       scratch.set(r, c, mat.get(r, c));
     }
   }
+  inverse(scratch, output);
+}
 
-  // TODO: This is a lazy approach and may be worth reworking
-  triangularSwap(scratch, output);
-  columnMirror(scratch);
-  columnMirror(output);
-  rowMirror(scratch);
-  rowMirror(output);
-  triangularSwap(scratch, output);
-  columnMirror(output);
-  rowMirror(output);
+template <uint16_t M, uint16_t N, bool T1, bool T2>
+void copy(const BaseMatrix<M, N, T1> &src, BaseWritableMatrix<M, N, T2> &dst) {
+  for (int r = 0; r < M; ++r) {
+    for (int c = 0; c < N; ++c) {
+      dst.set(r, c, src.get(r, c));
+    }
+  }
 }
 }  // namespace Matrix
 }  // namespace Clef::Util

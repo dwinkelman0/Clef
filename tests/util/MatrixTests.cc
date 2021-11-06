@@ -123,17 +123,29 @@ TEST(MatrixTest, Arithmetic) {
 }
 
 TEST(MatrixTest, Inverse) {
-  // TODO: test {4,0,0,0,0,0,2,0,0,1,2,0,1,0,0,1} since it requires row swapping
-  float data1[] = {1, 5, 4, 6, 8, -9, 2, 5, 0, 3, 5, -1, 5, -6, -8, 3};
+  float data1[16];
   float data2[16];
   float data3[16];
-  float data4[16];
-  RamMatrix<4, 4> m1(data1);
-  RamMatrix<4, 4> m2(data2);
-  RamMatrix<4, 4> m3(data3);
-  RamMatrix<4, 4> m4(data4);
-  Matrix::inverse(m1, m2, m3);
-  Matrix::dot(m1, m2, m4);
+  RamMatrix<4, 4> m2(data1);
+  RamMatrix<4, 4> m3(data2);
+  RamMatrix<4, 4> m4(data3);
+
+  float input1[] = {1, 5, 4, 6, 8, -9, 2, 5, 0, 3, 5, -1, 5, -6, -8, 3};
+  RamMatrix<4, 4> m1a(input1);
+  Matrix::inverse(m1a, m2, m3);
+  Matrix::dot(m1a, m2, m4);
+  for (int r = 0; r < 4; ++r) {
+    for (int c = 0; c < 4; ++c) {
+      ASSERT_FLOAT_EQ(m3.get(r, c), r == c ? 1 : 0);
+      ASSERT_NEAR(m4.get(r, c), r == c ? 1 : 0, 1e-6);
+    }
+  }
+
+  // This test requires row swapping since there is a zero on the diagonal
+  float input2[] = {4, 0, 0, 0, 0, 0, 2, 0, 0, 1, 2, 0, 1, 0, 0, 1};
+  RamMatrix<4, 4> m1b(input1);
+  Matrix::inverse(m1b, m2, m3);
+  Matrix::dot(m1b, m2, m4);
   for (int r = 0; r < 4; ++r) {
     for (int c = 0; c < 4; ++c) {
       ASSERT_FLOAT_EQ(m3.get(r, c), r == c ? 1 : 0);
