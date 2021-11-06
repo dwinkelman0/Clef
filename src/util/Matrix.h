@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <assert.h>
 #include <stdint.h>
 
 namespace Clef::Util {
@@ -14,6 +15,10 @@ class BaseMatrix {
 
  protected:
   virtual uint16_t calculateIndex(const uint16_t r, const uint16_t c) const {
+#ifndef TARGET_AVR
+    assert(r < R);
+    assert(c < C);
+#endif
     return T ? c * R + r : r * C + c;
   }
   virtual float readData(const uint16_t index) const = 0;
@@ -23,6 +28,10 @@ template <uint16_t N>
 class BaseDiagonalMatrix : public BaseMatrix<N, N, false> {
  public:
   virtual float get(const uint16_t r, const uint16_t c) const override {
+#ifndef TARGET_AVR
+    assert(r < N);
+    assert(c < N);
+#endif
     return r == c ? this->readData(r) : 0;
   }
 };
@@ -30,9 +39,18 @@ class BaseDiagonalMatrix : public BaseMatrix<N, N, false> {
 template <uint16_t N>
 class IdentityMatrix : public BaseDiagonalMatrix<N> {
  public:
+  IdentityMatrix() {}
+
   float get(const uint16_t r, const uint16_t c) const override {
+#ifndef TARGET_AVR
+    assert(r < N);
+    assert(c < N);
+#endif
     return r == c ? 1 : 0;
   }
+
+ private:
+  float readData(const uint16_t index) const override { return 0; }
 };
 
 template <uint16_t R, uint16_t C, bool T>
@@ -40,6 +58,14 @@ class BaseWritableMatrix : public BaseMatrix<R, C, T> {
  public:
   void set(const uint16_t r, const uint16_t c, const float value) {
     writeData(this->calculateIndex(r, c), value);
+  }
+
+  void fill(const float value) {
+    for (int r = 0; r < R; ++r) {
+      for (int c = 0; c < C; ++c) {
+        set(r, c, value);
+      }
+    }
   }
 
  protected:

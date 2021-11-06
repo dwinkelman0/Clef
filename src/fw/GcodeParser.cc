@@ -2,7 +2,7 @@
 
 #include "GcodeParser.h"
 
-#include <if/String.h>
+#include <if/Memory.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -12,7 +12,7 @@ set (Target_fw_atmega2560 clef-atmega2560)
 
 include_directories (src)
 
-file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc)
+file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc src/if/fw/kalman/*cc)
 
 if (${CLEF_TARGET} MATCHES "atmega2560")
     # Build Atmega2560 firmware
@@ -45,7 +45,7 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
     set_target_properties (
         ${elf_file}
         PROPERTIES
-            COMPILE_FLAGS "-mmcu=atmega2560 -Os -flto -D F_CPU=16000000L -Wall"
+            COMPILE_FLAGS "-mmcu=atmega2560 -Os -flto -D F_CPU=16000000L -Wall -D TARGET_AVR"
             LINK_FLAGS "-mmcu=atmega2560"
     )
     add_custom_command (

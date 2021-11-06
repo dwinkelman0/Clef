@@ -7,29 +7,31 @@
 
 namespace Clef::Fw {
 namespace Str {
-extern const char *OK; /*!< The commmand was received and properly enqueued. */
-extern const char *BUFFER_OVERFLOW_ERROR; /*!< The internal buffer in the G-code
-                                             parser is full; the current line is
-                                             dumped from the buffer. */
 extern const char
-    *INVALID_CODE_LETTER_ERROR; /*!< An invalid code letter (not A-Z,
+    *const OK; /*!< The commmand was received and properly enqueued. */
+extern const char *const BUFFER_OVERFLOW_ERROR; /*!< The internal buffer in the
+                                             G-code parser is full; the current
+                                             line is dumped from the buffer. */
+extern const char
+    *const INVALID_CODE_LETTER_ERROR; /*!< An invalid code letter (not A-Z,
                                    case-sensitive) was detected. */
-extern const char *DUPLICATE_CODE_LETTER_ERROR; /*!< The same code letter was
-                                                   supplied more than once. */
 extern const char
-    *UNDEFINED_CODE_LETTER_ERROR; /*!< A code letter was not supplied or was
-                                     supplied but did not have a value. */
+    *const DUPLICATE_CODE_LETTER_ERROR; /*!< The same code letter was
+                                     supplied more than once. */
 extern const char
-    *INVALID_INT_ERROR; /*!< An integer was expected but could not be parsed. */
-extern const char
-    *INVALID_FLOAT_ERROR; /*!< A float was expected but could not be parsed. */
-extern const char *
+    *const UNDEFINED_CODE_LETTER_ERROR; /*!< A code letter was not supplied or
+                                     was supplied but did not have a value. */
+extern const char *const
+    INVALID_INT_ERROR; /*!< An integer was expected but could not be parsed. */
+extern const char *const
+    INVALID_FLOAT_ERROR; /*!< A float was expected but could not be parsed. */
+extern const char *const
     MISSING_COMMAND_CODE_ERROR; /*!< Neither a 'G' nor an 'M' code was given. */
 extern const char
-    *INVALID_G_CODE_ERROR; /*!< The requested G-code is not supported. */
+    *const INVALID_G_CODE_ERROR; /*!< The requested G-code is not supported. */
 extern const char
-    *INSUFFICIENT_QUEUE_CAPACITY_ERROR; /*!< There is not enough space in the
-                                           queue to insert all the actions
+    *const INSUFFICIENT_QUEUE_CAPACITY_ERROR; /*!< There is not enough space in
+                                           the queue to insert all the actions
                                            required by the instruction. */
 }  // namespace Str
 
