@@ -92,7 +92,7 @@ class ExtendedKalmanFilter : public KalmanFilter<Xsize, Usize, Zsize> {
     PMatrix eyeKkHk(scratch2);
     PMatrix Pplus(scratch1);
     PMatrix deltaP(scratch2);
-    PMatrix deltaPWx(scratch1);
+    PMatrix deltaPWx(PminusMem);
     PMatrix WxdeltaPWx(scratch2);
     Clef::Util::Matrix::dot(Kk, Hk, KkHk);
     Clef::Util::Matrix::sub(Clef::Util::IdentityMatrix<Xsize>(), KkHk, eyeKkHk);

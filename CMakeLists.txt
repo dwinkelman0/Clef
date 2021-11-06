@@ -12,7 +12,7 @@ set (Target_fw_atmega2560 clef-atmega2560)
 
 include_directories (src)
 
-file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc src/if/fw/kalman/*cc)
+file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc src/fw/kalman/*.cc)
 
 if (${CLEF_TARGET} MATCHES "atmega2560")
     # Build Atmega2560 firmware

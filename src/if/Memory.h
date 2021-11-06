@@ -1,5 +1,7 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
+#pragma once
+
 #include <util/Matrix.h>
 
 #ifdef TARGET_AVR

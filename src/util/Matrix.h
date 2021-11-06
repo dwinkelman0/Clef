@@ -5,6 +5,11 @@
 #include <assert.h>
 #include <stdint.h>
 
+#ifndef TARGET_AVR
+#include <iomanip>
+#include <iostream>
+#endif
+
 namespace Clef::Util {
 template <uint16_t R, uint16_t C, bool T>
 class BaseMatrix {
@@ -12,6 +17,12 @@ class BaseMatrix {
   virtual float get(const uint16_t r, const uint16_t c) const {
     return readData(calculateIndex(r, c));
   }
+
+#ifndef TARGET_AVR
+  template <uint16_t R_, uint16_t C_, bool T_>
+  friend std::ostream &operator<<(std::ostream &os,
+                                  const BaseMatrix<R_, C_, T_> &mat);
+#endif
 
  protected:
   virtual uint16_t calculateIndex(const uint16_t r, const uint16_t c) const {
@@ -23,6 +34,20 @@ class BaseMatrix {
   }
   virtual float readData(const uint16_t index) const = 0;
 };
+
+#ifndef TARGET_AVR
+template <uint16_t R, uint16_t C, bool T>
+std::ostream &operator<<(std::ostream &os, const BaseMatrix<R, C, T> &mat) {
+  os << std::fixed << std::setprecision(6);
+  for (int r = 0; r < R; ++r) {
+    for (int c = 0; c < C; ++c) {
+      os << std::setw(10) << mat.get(r, c) << ",";
+    }
+    os << std::endl;
+  }
+  return os;
+}
+#endif
 
 template <uint16_t N>
 class BaseDiagonalMatrix : public BaseMatrix<N, N, false> {
@@ -245,6 +270,12 @@ void columnMirror(BaseWritableMatrix<N, N, T> &mat) {
  */
 template <uint16_t N>
 void inverse(RamMatrix<N, N> &mat, RamMatrix<N, N> &output) {
+  for (int r = 0; r < N; ++r) {
+    for (int c = 0; c < N; ++c) {
+      output.set(r, c, r == c ? 1 : 0);
+    }
+  }
+
   // TODO: This is a lazy approach and may be worth reworking
   triangularSwap(mat, output);
   columnMirror(mat);
@@ -270,7 +301,6 @@ void inverse(const BaseMatrix<N, N, T> &mat, RamMatrix<N, N> &output,
              RamMatrix<N, N> &scratch) {
   for (int r = 0; r < N; ++r) {
     for (int c = 0; c < N; ++c) {
-      output.set(r, c, r == c ? 1 : 0);
       scratch.set(r, c, mat.get(r, c));
     }
   }

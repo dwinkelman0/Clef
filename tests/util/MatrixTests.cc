@@ -122,7 +122,34 @@ TEST(MatrixTest, Arithmetic) {
   ASSERT_EQ(v4.get(2, 0), -2);
 }
 
-TEST(MatrixTest, Inverse) {
+TEST(MatrixTest, Inverse1x1) {
+  float input1[] = {4};
+  float data1[1];
+  float data2[1];
+  RamMatrix<1, 1> m1a(input1);
+  RamMatrix<1, 1> m2(data1);
+  RamMatrix<1, 1> m3(data2);
+  Matrix::inverse(m1a, m3, m2);
+  ASSERT_EQ(m3.get(0, 0), 0.25);
+  Matrix::inverse(m1a, m3);
+  ASSERT_EQ(m3.get(0, 0), 0.25);
+}
+
+TEST(MatrixTest, Inverse2x2) {
+  float input1[] = {1, 2, 1, 3};
+  float data1[4];
+  float data2[4];
+  RamMatrix<2, 2> m1(input1);
+  RamMatrix<2, 2> m2(data1);
+  RamMatrix<2, 2> m3(data2);
+  Matrix::inverse(m1, m3, m2);
+  ASSERT_EQ(m3.get(0, 0), 3);
+  ASSERT_EQ(m3.get(0, 1), -2);
+  ASSERT_EQ(m3.get(1, 0), -1);
+  ASSERT_EQ(m3.get(1, 1), 1);
+}
+
+TEST(MatrixTest, Inverse4x4) {
   float data1[16];
   float data2[16];
   float data3[16];

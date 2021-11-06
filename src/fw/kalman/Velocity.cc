@@ -6,21 +6,23 @@ namespace Clef::Fw::Kalman {
 namespace {
 ARRAY(float, memQ, {1, 1});
 ARRAY(float, memR, {1});
-ARRAY(float, memWx, {1, 1});
+ARRAY(float, memWx, {1, 0.5});
 
 typename BaseVelocityFilter::QMatrix Q(memQ);
 typename BaseVelocityFilter::RMatrix R(memR);
 typename BaseVelocityFilter::WxMatrix Wx(memWx);
 }  // namespace
 
-VelocityFilter::VelocityFilter() : BaseVelocityFilter(Q, R, Wx) {}
+VelocityFilter::VelocityFilter() : BaseVelocityFilter(Q, R, Wx) { init(); }
 
 void VelocityFilter::evolve(const float xe, const float xs,
                             const float deltat) {
-  float uMem[] = {xe};
-  float zMem[] = {xs};
+  float uMem[1];
+  float zMem[1];
   typename BaseVelocityFilter::UVector u(uMem);
   typename BaseVelocityFilter::ZVector z(zMem);
+  u.set(0, 0, xe);
+  z.set(0, 0, xs);
   BaseVelocityFilter::evolve(u, z, deltat);
 }
 
