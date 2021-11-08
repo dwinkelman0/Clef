@@ -4,7 +4,7 @@
 
 namespace Clef::Fw::Kalman {
 namespace {
-ARRAY(float, memQ, {1, 1});
+ARRAY(float, memQ, {/* x */ 1, /* v */ 1});
 ARRAY(float, memR, {1});
 ARRAY(float, memWx, {1, 0.5});
 

@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <string.h>
 
 #ifndef TARGET_AVR
 #include <iomanip>
@@ -39,8 +40,8 @@ class BaseMatrix {
 template <uint16_t R, uint16_t C, bool T>
 std::ostream &operator<<(std::ostream &os, const BaseMatrix<R, C, T> &mat) {
   os << std::fixed << std::setprecision(6);
-  for (int r = 0; r < R; ++r) {
-    for (int c = 0; c < C; ++c) {
+  for (unsigned int r = 0; r < R; ++r) {
+    for (unsigned int c = 0; c < C; ++c) {
       os << std::setw(10) << mat.get(r, c) << ",";
     }
     os << std::endl;
@@ -85,9 +86,9 @@ class BaseWritableMatrix : public BaseMatrix<R, C, T> {
     writeData(this->calculateIndex(r, c), value);
   }
 
-  void fill(const float value) {
-    for (int r = 0; r < R; ++r) {
-      for (int c = 0; c < C; ++c) {
+  virtual void fill(const float value) {
+    for (unsigned int r = 0; r < R; ++r) {
+      for (unsigned int c = 0; c < C; ++c) {
         set(r, c, value);
       }
     }
@@ -108,6 +109,14 @@ class BaseRamMatrix : public BaseWritableMatrix<R, C, T> {
 
   BaseRamMatrix<C, R, !T> transpose() const {
     return BaseRamMatrix<C, R, !T>(*this);
+  }
+
+  void fill(const float value) override {
+    if (value == 0) {
+      memset(data_, 0, R * C * sizeof(float));
+    } else {
+      BaseWritableMatrix<R, C, T>::fill(value);
+    }
   }
 
  protected:
@@ -138,10 +147,10 @@ namespace Matrix {
 template <uint16_t K, uint16_t M, uint16_t N, bool T1, bool T2>
 void dot(const BaseMatrix<K, M, T1> &left, const BaseMatrix<M, N, T2> &right,
          BaseWritableMatrix<K, N, false> &output) {
-  for (int r = 0; r < K; ++r) {
-    for (int c = 0; c < N; ++c) {
+  for (unsigned int r = 0; r < K; ++r) {
+    for (unsigned int c = 0; c < N; ++c) {
       float sum = 0;
-      for (int j = 0; j < M; ++j) {
+      for (unsigned int j = 0; j < M; ++j) {
         sum += left.get(r, j) * right.get(j, c);
       }
       output.set(r, c, sum);
@@ -152,8 +161,8 @@ void dot(const BaseMatrix<K, M, T1> &left, const BaseMatrix<M, N, T2> &right,
 template <uint16_t M, uint16_t N, bool T>
 void dot(const BaseDiagonalMatrix<M> &left, const BaseMatrix<M, N, T> &right,
          BaseWritableMatrix<M, N, false> &output) {
-  for (int r = 0; r < M; ++r) {
-    for (int c = 0; c < N; ++c) {
+  for (unsigned int r = 0; r < M; ++r) {
+    for (unsigned int c = 0; c < N; ++c) {
       output.set(r, c, left.get(r, r) * right.get(r, c));
     }
   }
@@ -162,8 +171,8 @@ void dot(const BaseDiagonalMatrix<M> &left, const BaseMatrix<M, N, T> &right,
 template <uint16_t M, uint16_t N, bool T>
 void dot(const BaseMatrix<M, N, T> &left, BaseDiagonalMatrix<N> &right,
          BaseWritableMatrix<M, N, false> &output) {
-  for (int r = 0; r < M; ++r) {
-    for (int c = 0; c < N; ++c) {
+  for (unsigned int r = 0; r < M; ++r) {
+    for (unsigned int c = 0; c < N; ++c) {
       output.set(r, c, left.get(r, c) * right.get(c, c));
     }
   }
@@ -172,8 +181,8 @@ void dot(const BaseMatrix<M, N, T> &left, BaseDiagonalMatrix<N> &right,
 template <uint16_t M, uint16_t N, bool T1, bool T2>
 void add(const BaseMatrix<M, N, T1> &left, const BaseMatrix<M, N, T2> &right,
          BaseWritableMatrix<M, N, false> &output) {
-  for (int r = 0; r < M; ++r) {
-    for (int c = 0; c < N; ++c) {
+  for (unsigned int r = 0; r < M; ++r) {
+    for (unsigned int c = 0; c < N; ++c) {
       output.set(r, c, left.get(r, c) + right.get(r, c));
     }
   }
@@ -182,8 +191,8 @@ void add(const BaseMatrix<M, N, T1> &left, const BaseMatrix<M, N, T2> &right,
 template <uint16_t M, uint16_t N, bool T1, bool T2>
 void sub(const BaseMatrix<M, N, T1> &left, const BaseMatrix<M, N, T2> &right,
          BaseWritableMatrix<M, N, false> &output) {
-  for (int r = 0; r < M; ++r) {
-    for (int c = 0; c < N; ++c) {
+  for (unsigned int r = 0; r < M; ++r) {
+    for (unsigned int c = 0; c < N; ++c) {
       output.set(r, c, left.get(r, c) - right.get(r, c));
     }
   }
@@ -200,37 +209,37 @@ namespace {
  */
 template <uint16_t N>
 void triangularSwap(RamMatrix<N, N> &scratch, RamMatrix<N, N> &output) {
-  for (int c = 0; c < N; ++c) {
+  for (unsigned int c = 0; c < N; ++c) {
     // Normalize the row
     float diag = scratch.get(c, c);
-    for (int r = c + 1; r < N && diag == 0; ++r) {
+    for (unsigned int r = c + 1; r < N && diag == 0; ++r) {
       // May need to do swaps if one of the diagonal elements is zero
-      for (int j = 0; j < N; ++j) {
+      for (unsigned int j = 0; j < N; ++j) {
         float temp = output.get(c, j);
         output.set(c, j, output.get(r, j));
         output.set(r, j, temp);
       }
-      for (int j = c; j < N; ++j) {
+      for (unsigned int j = c; j < N; ++j) {
         float temp = scratch.get(c, j);
         scratch.set(c, j, scratch.get(r, j));
         scratch.set(r, j, temp);
       }
       diag = scratch.get(c, c);
     }
-    for (int j = 0; j < N; ++j) {
+    for (unsigned int j = 0; j < N; ++j) {
       output.set(c, j, output.get(c, j) / diag);
     }
-    for (int j = c; j < N; ++j) {
+    for (unsigned int j = c; j < N; ++j) {
       scratch.set(c, j, scratch.get(c, j) / diag);
     }
 
     // Subtract the row from all lower rows
-    for (int r = c + 1; r < N; ++r) {
+    for (unsigned int r = c + 1; r < N; ++r) {
       float factor = scratch.get(r, c);
-      for (int j = 0; j < N; ++j) {
+      for (unsigned int j = 0; j < N; ++j) {
         output.set(r, j, output.get(r, j) - output.get(c, j) * factor);
       }
-      for (int j = c; j < N; ++j) {
+      for (unsigned int j = c; j < N; ++j) {
         scratch.set(r, j, scratch.get(r, j) - scratch.get(c, j) * factor);
       }
     }
@@ -239,8 +248,8 @@ void triangularSwap(RamMatrix<N, N> &scratch, RamMatrix<N, N> &output) {
 
 template <uint16_t N, bool T>
 void rowMirror(BaseWritableMatrix<N, N, T> &mat) {
-  for (int r = 0; r < N / 2; ++r) {
-    for (int c = 0; c < N; ++c) {
+  for (unsigned int r = 0; r < N / 2; ++r) {
+    for (unsigned int c = 0; c < N; ++c) {
       float temp = mat.get(r, c);
       mat.set(r, c, mat.get(N - r - 1, c));
       mat.set(N - r - 1, c, temp);
@@ -250,8 +259,8 @@ void rowMirror(BaseWritableMatrix<N, N, T> &mat) {
 
 template <uint16_t N, bool T>
 void columnMirror(BaseWritableMatrix<N, N, T> &mat) {
-  for (int r = 0; r < N; ++r) {
-    for (int c = 0; c < N / 2; ++c) {
+  for (unsigned int r = 0; r < N; ++r) {
+    for (unsigned int c = 0; c < N / 2; ++c) {
       float temp = mat.get(r, c);
       mat.set(r, c, mat.get(r, N - c - 1));
       mat.set(r, N - c - 1, temp);
@@ -270,8 +279,8 @@ void columnMirror(BaseWritableMatrix<N, N, T> &mat) {
  */
 template <uint16_t N>
 void inverse(RamMatrix<N, N> &mat, RamMatrix<N, N> &output) {
-  for (int r = 0; r < N; ++r) {
-    for (int c = 0; c < N; ++c) {
+  for (unsigned int r = 0; r < N; ++r) {
+    for (unsigned int c = 0; c < N; ++c) {
       output.set(r, c, r == c ? 1 : 0);
     }
   }
@@ -299,8 +308,8 @@ void inverse(RamMatrix<N, N> &mat, RamMatrix<N, N> &output) {
 template <uint16_t N, bool T>
 void inverse(const BaseMatrix<N, N, T> &mat, RamMatrix<N, N> &output,
              RamMatrix<N, N> &scratch) {
-  for (int r = 0; r < N; ++r) {
-    for (int c = 0; c < N; ++c) {
+  for (unsigned int r = 0; r < N; ++r) {
+    for (unsigned int c = 0; c < N; ++c) {
       scratch.set(r, c, mat.get(r, c));
     }
   }
@@ -309,8 +318,8 @@ void inverse(const BaseMatrix<N, N, T> &mat, RamMatrix<N, N> &output,
 
 template <uint16_t M, uint16_t N, bool T1, bool T2>
 void copy(const BaseMatrix<M, N, T1> &src, BaseWritableMatrix<M, N, T2> &dst) {
-  for (int r = 0; r < M; ++r) {
-    for (int c = 0; c < N; ++c) {
+  for (unsigned int r = 0; r < M; ++r) {
+    for (unsigned int c = 0; c < N; ++c) {
       dst.set(r, c, src.get(r, c));
     }
   }

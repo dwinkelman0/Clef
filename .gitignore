@@ -13,3 +13,5 @@ build-*
 **/kalman-*
 **/gcode
 **/select
+**/models/*.cc
+**/models/*.h

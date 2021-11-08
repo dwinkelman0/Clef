@@ -45,6 +45,11 @@ track_params_parser.add_argument(
 track_params_parser.add_argument("--vars", type=str, nargs="+", required=True)
 track_params_parser.add_argument(
     "--params", type=str, nargs="+", required=True)
+generate_parser = subparsers.add_parser("generate")
+generate_parser.add_argument("--model", type=str, required=True)
+generate_parser.add_argument(
+    "--language", choices=["python3", "cpp"], required=True)
+generate_parser.add_argument("--output-dir", type=str, default=None)
 
 logFileName = "log-{}".format(datetime.datetime.now().isoformat())
 
@@ -118,7 +123,12 @@ class Sum(Expression):
             self.right.partialDerivative(var)
 
     def __repr__(self):
-        return "{} + {}".format(repr(self.left), repr(self.right))
+        return self.formatVars(lambda v: str(v))
+
+    def formatVars(self, format):
+        return "{} + {}".format(
+            self.left.formatVars(format),
+            self.right.formatVars(format))
 
 
 class Product(Expression):
@@ -141,13 +151,16 @@ class Product(Expression):
             self.right.partialDerivative(var) * self.left
 
     def __repr__(self):
+        return self.formatVars(lambda v: str(v))
+
+    def formatVars(self, format):
         return "{} * {}".format(
-            "({})".format(repr(self.left))
+            "({})".format(self.left.formatVars(format))
             if type(self.left) is Sum
-            else repr(self.left),
-            "({})".format(repr(self.right))
+            else self.left.formatVars(format),
+            "({})".format(self.right.formatVars(format))
             if type(self.right) is Sum
-            else repr(self.right),
+            else self.right.formatVars(format),
         )
 
 
@@ -174,7 +187,12 @@ class Power(Expression):
                 raise Exception()
 
     def __repr__(self):
-        return "-pow(-{0}, {1}) if {0} < 0 else pow({0}, {1})".format(repr(self.base), repr(self.power))
+        return self.formatVars(lambda v: str(v))
+
+    def formatVars(self, format):
+        return "-pow(-{0}, {1}) if {0} < 0 else pow({0}, {1})".format(
+            self.base.formatVars(format),
+            self.power.formatVars(format))
 
 
 class Conditional(Expression):
@@ -195,10 +213,14 @@ class Conditional(Expression):
             self.greaterThan.partialDerivative(var))
 
     def __repr__(self):
+        return self.formatVars(lambda v: str(v))
+
+    def formatVars(self, format):
         return "{} if {} > {} else {}".format(
-            repr(self.greaterThan),
-            repr(self.var), repr(self.threshold),
-            repr(self.lessThan))
+            self.greaterThan.formatVars(format),
+            self.var.formatVars(format),
+            self.threshold.formatVars(format),
+            self.lessThan.formatVars(format))
 
 
 class Constant(Expression):
@@ -212,6 +234,9 @@ class Constant(Expression):
         return Constant(0)
 
     def __repr__(self):
+        return str(self.value)
+
+    def formatVars(self, format):
         return str(self.value)
 
 
@@ -248,6 +273,9 @@ class ProcessVariable(Expression):
 
     def __repr__(self):
         return self.symbol
+
+    def formatVars(self, format):
+        return format(self)
 
 
 def recurseSum(expr):
@@ -312,6 +340,184 @@ class KalmanFilterGenerator:
         zvarJson = {str(zvar): zvar.asJson("xvar") for zvar in self.zvars}
         uvarJson = {str(uvar): uvar.asJson("xvar") for uvar in self.uvars}
         return {**xvarJson, **zvarJson, **uvarJson}
+
+    def generateCppFunctions(self, outputPath):
+        filterName = os.path.split(outputPath)[-1].capitalize()
+        className = "{}Filter".format(filterName)
+
+        def indexOfVar(var):
+            if var in self.xvars:
+                return "xk.get({}, 0)".format(self.xvars.index(var))
+            elif var in self.uvars:
+                return "uk.get({}, 0)".format(self.uvars.index(var))
+            elif var in self.zvars:
+                return "zk.get({}, 0)".format(self.zvars.index(var))
+            elif var == self.deltat:
+                return "deltat"
+
+        def generateTransitionFunc(vars, f, suffix):
+            return "\n\n".join((
+                "\n".join([
+                    "  // {}{} = {}".format(
+                        str(var),
+                        suffix,
+                        expr.formatVars(lambda v: "{}(k)".format(str(v)))),
+                    "  output.set({}, 0, {});".format(
+                        i, expr.formatVars(indexOfVar)),
+                ]) for i, (var, expr) in enumerate(zip(vars, f))
+            ))
+
+        def generateTransitionGradient(vars1, vars2, dfdx, suffix):
+            return "\n\n".join((
+                "\n\n".join([
+                    "\n".join([
+                        "  // d{}/d{}{} = {}".format(
+                            str(var1),
+                            str(var2),
+                            suffix,
+                            expr.formatVars(lambda v: "{}(k)".format(str(v)))),
+                        "  output.set({}, {}, {});".format(
+                            i1, i2, expr.formatVars(indexOfVar)),
+                    ]) for i2, (var2, expr) in enumerate(zip(vars2, row)) if not expr.isZero()
+                ]) for i1, (var1, row) in enumerate(zip(vars1, dfdx))
+            ))
+
+        headerSource = "\n".join([
+            "#include <fw/KalmanFilter.h>\n",
+            "namespace Clef::Fw::Kalman {",
+            "using Base{} = Clef::Fw::ExtendedKalmanFilter<{}, {}, {}>;".format(
+                className, len(self.xvars), len(self.uvars), len(self.zvars)),
+            "class {0} : public Base{0} {{".format(className),
+            " public:",
+            "  {}();".format(className),
+            "  void evolve(",
+            "\n".join(("      /* {} Variables */ {}".format(
+                label,
+                " ".join(("const float {},".format(str(var)) for var in vars)))
+                for vars, label in [
+                    (self.uvars, "Control"),
+                    (self.zvars, "Observation")])),
+            "      /* Time Step */ const float deltat);",
+            """
+ private:
+  void init() override;
+
+  void calculateStateTrans(
+      const typename Base{0}::XVector &xk,
+      const typename Base{0}::UVector &uk, const float deltat,
+      typename Base{0}::XVector &output) const override;
+  void calculateStateTransGradient(
+      const typename Base{0}::XVector &xk,
+      const typename Base{0}::UVector &uk, const float deltat,
+      typename Base{0}::FMatrix &output) const override;
+  void calculateObservationTrans(
+      const typename Base{0}::XVector &xk,
+      typename Base{0}::ZVector &output) const override;
+  void calculateObserationTransGradient(
+      const typename Base{0}::XVector &xk,
+      typename Base{0}::HMatrix &output) const override;""".format(className),
+            "};",
+            "}  // namespace Clef::Fw::Kalman",
+        ])
+
+        cppSource = "\n".join([
+            "#include \"{}.h\"\n".format(filterName),
+            "namespace Clef::Fw::Kalman {",
+            "namespace {",
+            "ARRAY(float, memQ, {{{}}});".format(
+                ", ".join(("/* {} */ {}".format(str(var), var.noise) for var in self.xvars))),
+            "ARRAY(float, memR, {{{}}});".format(
+                ", ".join(("/* {} */ {}".format(str(var), var.noise) for var in self.zvars))),
+            "ARRAY(float, memWx, {{{}}});".format(", ".join(
+                ("/* {} */ {}".format(str(var), var.updateWeight) for var in self.xvars))),
+            "\n".join(("typename Base{0}::{1}Matrix {1}(mem{1});".format(
+                className, matName) for matName in ["Q", "R", "Wx"])),
+            "} // namespace",
+            "",
+            "{0}::{0}() : Base{0}(Q, R, Wx) {{ init(); }}".format(className),
+            "",
+            "void {}::evolve(".format(className),
+            "\n".join(("    /* {} Variables */ {}".format(
+                label,
+                " ".join(("const float {},".format(str(var)) for var in vars)))
+                for vars, label in [
+                    (self.uvars, "Control"),
+                    (self.zvars, "Observation")])),
+            "    /* Time Step */ const float deltat) {",
+            "\n".join(("\n".join([
+                "  float {}Mem[{}];".format(label, len(vars)),
+                "  typename Base{0}::{1}Vector {2}({2}Mem);".format(
+                    className, label.upper(), label),
+                "\n".join(("  {}.set({}, 0, {});".format(label, i, str(var))
+                          for i, var in enumerate(vars))),
+            ]) for label, vars in [("u", self.uvars), ("z", self.zvars)])),
+            "  Base{}::evolve(u, z, deltat);".format(className),
+            "}",
+            "",
+            "void {}::init() {{".format(className),
+            "  P_.fill(0);",
+            "\n".join(("  x_.set({}, 0, {});  // {}".format(
+                i, var.initialValue, str(var))
+                for i, var in enumerate(self.xvars))),
+            "\n".join(("  P_.set({0}, {0}, {1});  // {2}".format(
+                i, var.initialCovariance, str(var))
+                for i, var in enumerate(self.xvars))),
+            "}",
+            "",
+            "void {}::calculateStateTrans(".format(className),
+            "    const typename Base{}::XVector &xk,".format(className),
+            "    const typename Base{}::UVector &uk,".format(className),
+            "    const float deltat,",
+            "    typename Base{}::XVector &output) const {{".format(className),
+            generateTransitionFunc(self.xvars, self.f, "(k+1)"),
+            "}",
+            "",
+            "void {}::calculateStateTransGradient(".format(className),
+            "    const typename Base{}::XVector &xk,".format(className),
+            "    const typename Base{}::UVector &uk,".format(className),
+            "    const float deltat,",
+            "    typename Base{}::FMatrix &output) const {{".format(className),
+            "  output.fill(0);",
+            "",
+            generateTransitionGradient(
+                self.xvars, self.xvars, self.dfdx, "(k+1)"),
+            "}",
+            "",
+            "void {}::calculateObservationTrans(".format(className),
+            "    const typename Base{}::XVector &xk,".format(className),
+            "    typename Base{}::ZVector &output) const {{".format(className),
+            generateTransitionFunc(self.zvars, self.h, "(k)"),
+            "}",
+            "",
+            "void {}::calculateObserationTransGradient(".format(className),
+            "    const typename Base{}::XVector &xk,".format(className),
+            "    typename Base{}::HMatrix &output) const {{".format(className),
+            "  output.fill(0);",
+            "",
+            generateTransitionGradient(
+                self.zvars, self.xvars, self.dhdx, "(k)"),
+            "}",
+            "} // namespace Clef::Fw::Kalman",
+        ])
+
+        print("Writing to {}...".format(outputPath))
+
+        # Dump source to file
+        with open("{}.h".format(outputPath), "w") as outputFile:
+            outputFile.write(
+                "// Copyright 2021 by Daniel Winkelman. All rights reserved.\n")
+            outputFile.write(
+                "// This file is autogenerated by kalman.py.\n\n")
+            outputFile.write(headerSource)
+            outputFile.write("\n")
+
+        with open("{}.cc".format(outputPath), "w") as outputFile:
+            outputFile.write(
+                "// Copyright 2021 by Daniel Winkelman. All rights reserved.\n")
+            outputFile.write(
+                "// This file is autogenerated by kalman.py.\n\n")
+            outputFile.write(cppSource)
+            outputFile.write("\n")
 
     def generatePython3Functions(self, outputPath):
         def generateUnpackingConditionals(vars, varsArrayName):
@@ -555,9 +761,9 @@ class UnscentedKalmanFilterState:
         z = [self.h(s) for s in supdate]
         zhat = sum((Wj * z[j] for j, Wj in enumerate(self.Wa)))
         Sk = sum((Wj * (z[j] - zhat) @ (z[j] - zhat).T
-                 for j, Wj in enumerate(self.Wc))) + self.R
+                  for j, Wj in enumerate(self.Wc))) + self.R
         Csz = sum((Wj * (supdate[j] - xminus) @ (z[j] - zhat).T
-                  for j, Wj in enumerate(self.Wc)))
+                   for j, Wj in enumerate(self.Wc)))
         Kk = Csz @ np.linalg.inv(Sk)
         self.x = xminus + self.Wx @ Kk @ (zk - zhat)
         Pplus = Pminus - Kk @ Sk @ Kk.T
@@ -599,8 +805,8 @@ def calculateErrorCosts(generator, inputSeries, outputSeries, plotFunc):
     costs = {}
     for var in generator.xvars + generator.zvars:
         if var in generator.mevars:
-            referenceSeries = \
-                inputSeries[generator.mevars[var]["referenceVar"]]
+            referenceSeries = inputSeries[generator.mevars[var]
+                                          ["referenceVar"]]
             errorSeries = outputSeries[var].error(referenceSeries)
             error = errorSeries.rms() / referenceSeries.averageAbs()
             costFactor = generator.mevars[var]["weight"] * error
@@ -614,8 +820,7 @@ def calculateSmoothnessCosts(generator, outputSeries):
     costs = {}
     for var in generator.xvars + generator.zvars:
         if var in generator.msvars:
-            smoothness = \
-                outputSeries[var].smoothness(generator.msvars[var]["filterCoef"]) / \
+            smoothness = outputSeries[var].smoothness(generator.msvars[var]["filterCoef"]) / \
                 outputSeries[var].rms()
             costFactor = generator.msvars[var]["weight"] * smoothness
             costs[var] = costFactor
@@ -990,5 +1195,13 @@ if __name__ == "__main__":
                 series = utils.Series(
                     "{}_{}".format(var, param), "cost", np.array(data))
                 utils.plotHistogramAndAverages(series, outputDir)
+    elif args.command == "generate":
+        spec = openKalmanSpec(args.model)
+        if args.output_dir is None:
+            path = os.path.split(os.path.splitext(args.model)[0])
+            outputDir = os.path.join(*path[:-1], path[-1].capitalize())
+        else:
+            outputDir = args.output_dir
+        spec.generator.generateCppFunctions(outputDir)
     else:
         print("Please choose a command")
