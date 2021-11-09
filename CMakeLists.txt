@@ -24,6 +24,7 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
     find_program (AVR_OBJCOPY avr-objcopy REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
     find_program (AVR_SIZE_TOOL avr-size REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
     find_program (AVR_OBJDUMP avr-objdump REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
+    find_program (AVR_NM avr-nm REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
     find_program (AVRDUDE avrdude REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
 
     set (CMAKE_SYSTEM_NAME Generic)
@@ -80,6 +81,11 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
         ALL ${AVR_SIZE_TOOL} -C --mcu=atmega2560 ${elf_file}
         DEPENDS ${elf_file}
     )
+    # add_custom_target (
+    #     ${Target_fw_atmega2560}-mem
+    #     ALL ${AVR_NM} --defined-only --line-numbers --size-sort -S ${elf_file}
+    #     DEPENDS ${elf_file}
+    # )
     if (DEFINED CLEF_PORT AND DEFINED CLEF_BAUD)
         add_custom_target(
             ${Target_fw_atmega2560}-upload-hex

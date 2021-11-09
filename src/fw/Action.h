@@ -174,7 +174,7 @@ struct Context {
   Clef::If::Clock &clock;
   Clef::If::RWSerial &serial;
   Clef::Fw::ActionQueue &actionQueue;
-  Clef::Fw::XYEPositionQueue xyePositionQueue;
+  Clef::Fw::XYEPositionQueue &xyePositionQueue;
 };
 
 class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {

@@ -13,7 +13,7 @@
  * in memory (e.g. as PROGMEM in AVR).
  */
 #ifdef TARGET_AVR
-#define STRING(name, contents) const char *const name PROGMEM = #contents
+#define STRING(name, contents) const char *const name PROGMEM = contents
 #define ARRAY(type, name, ...) const type name[] PROGMEM = __VA_ARGS__
 #else
 #define STRING(name, contents) const char *const name = contents

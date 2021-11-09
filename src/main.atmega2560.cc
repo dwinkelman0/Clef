@@ -32,7 +32,8 @@ Clef::Fw::Axes::EAxis eAxis(Clef::Impl::Atmega2560::eAxisStepper,
                             extrusionPredictor);
 Clef::Fw::Axes axes(xAxis, yAxis, zAxis, eAxis);
 Clef::Fw::Context context({axes, gcodeParser, clock,
-                           Clef::Impl::Atmega2560::serial, actionQueue});
+                           Clef::Impl::Atmega2560::serial, actionQueue,
+                           xyePositionQueue});
 
 void status(void *arg) {
   static int counter = 0;
