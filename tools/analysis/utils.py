@@ -260,6 +260,7 @@ def plotHistogramAndAverages(series, outputDir, outputFileName=None, show=False,
 
     plt.figure(dpi=200)
     fig, (ax1, ax2) = plt.subplots(2)
+    fig.set_size_inches(10, 7.5)
     bins, _, _ = ax2.hist(series.array[:, 0], bins=10)
     total = 0
     averagesInd = []
@@ -268,7 +269,7 @@ def plotHistogramAndAverages(series, outputDir, outputFileName=None, show=False,
         if b > 0:
             averagesInd.append(
                 "{:.2e}".format(sum(series.array[int(total):int(total+b), 0]) / b))
-            averagesDep.append(series.array[int(total):int(total+b), 1])
+            averagesDep.append(series.array[int(total):int(total+b*0.9), 1])
             total += b
     ax1.boxplot(averagesDep, labels=averagesInd)
     ax1.set_yscale("log")

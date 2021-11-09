@@ -16,10 +16,15 @@ import matplotlib.pyplot as plt
 import utils
 
 
+def addModelArgs(parser):
+    parser.add_argument("--model", type=str, required=True)
+    parser.add_argument("--override-params", type=str, default=None)
+
+
 def addFilterArgs(parser):
+    addModelArgs(parser)
     parser.add_argument(
         "--filter-type", type=str, choices=["ekf", "ukf"], required=True)
-    parser.add_argument("--model", type=str, required=True)
     parser.add_argument("--batch", action="store_true", default=False)
     parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
     parser.add_argument("--data-dir-root", type=str, default=".")
@@ -40,13 +45,14 @@ addFilterArgs(optimize_parser)
 optimize_parser.add_argument("--step-size", type=float, default=0.2)
 track_params_parser = subparsers.add_parser("track-params")
 track_params_parser.add_argument("--model-dir-root", type=str, required=True)
+track_params_parser.add_argument("--model-dir-regex", type=str, default=None)
 track_params_parser.add_argument(
     "--model-file-regex", type=str, default="summary\\.json")
 track_params_parser.add_argument("--vars", type=str, nargs="+", required=True)
 track_params_parser.add_argument(
     "--params", type=str, nargs="+", required=True)
 generate_parser = subparsers.add_parser("generate")
-generate_parser.add_argument("--model", type=str, required=True)
+addModelArgs(generate_parser)
 generate_parser.add_argument(
     "--language", choices=["python3", "cpp"], required=True)
 generate_parser.add_argument("--output-dir", type=str, default=None)
@@ -337,9 +343,22 @@ class KalmanFilterGenerator:
 
     def generateJsonSpec(self):
         xvarJson = {str(xvar): xvar.asJson("xvar") for xvar in self.xvars}
-        zvarJson = {str(zvar): zvar.asJson("xvar") for zvar in self.zvars}
-        uvarJson = {str(uvar): uvar.asJson("xvar") for uvar in self.uvars}
+        zvarJson = {str(zvar): zvar.asJson("zvar") for zvar in self.zvars}
+        uvarJson = {str(uvar): uvar.asJson("uvar") for uvar in self.uvars}
         return {**xvarJson, **zvarJson, **uvarJson}
+
+    def overrideParams(self, inputJson):
+        def setVarParams(var, params):
+            for name, value in params.items():
+                if name != "mode":
+                    setattr(var, name, value)
+
+        for xvar in self.xvars:
+            if str(xvar) in inputJson["vars"]:
+                setVarParams(xvar, inputJson["vars"][str(xvar)])
+        for zvar in self.zvars:
+            if str(zvar) in inputJson["vars"]:
+                setVarParams(zvar, inputJson["vars"][str(zvar)])
 
     def generateCppFunctions(self, outputPath):
         filterName = os.path.split(outputPath)[-1].capitalize()
@@ -1112,14 +1131,18 @@ def analyzeBatch(
 if __name__ == "__main__":
     # Parse command line args and set up directories
     args = parser.parse_args((sys.argv[1:]))
-    if args.command == "run" or args.command == "optimize":
-        dataDirs = getDataDirs(args)
+    if any((args.command == s for s in ("run", "optimize", "generate"))):
         spec = openKalmanSpec(args.model)
+        if not args.override_params is None:
+            with open(args.override_params, "r") as jsonFile:
+                spec.generator.overrideParams(json.load(jsonFile))
     if args.command == "run":
+        dataDirs = getDataDirs(args)
         cost = analyzeBatch(
             dataDirs, spec, args.filter_type, outputSubdirs=["run"],
             generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup, disableLogging=args.disable_logging)
     elif args.command == "optimize":
+        dataDirs = getDataDirs(args)
         for n in range(100):
             costs = []
             print("==== Round {} ====".format(n))
@@ -1167,11 +1190,16 @@ if __name__ == "__main__":
             if bestCost == referenceCost:
                 break
     elif args.command == "track-params":
+        if not args.model_dir_regex is None:
+            modelDirRe = re.compile(args.model_dir_regex)
         modelFileRe = re.compile(args.model_file_regex)
         dataPoints = {}
         allVars = len(args.vars) == 1 and args.vars[0] == "all"
         allParams = len(args.params) == 1 and args.params[0] == "all"
         for current, folders, files in os.walk(args.model_dir_root):
+            if not args.model_dir_regex is None and not modelDirRe.match(current):
+                continue
+            print(current)
             for file in files:
                 if modelFileRe.match(file):
                     with open(os.path.join(current, file)) as inputFile:
@@ -1196,7 +1224,6 @@ if __name__ == "__main__":
                     "{}_{}".format(var, param), "cost", np.array(data))
                 utils.plotHistogramAndAverages(series, outputDir)
     elif args.command == "generate":
-        spec = openKalmanSpec(args.model)
         if args.output_dir is None:
             path = os.path.split(os.path.splitext(args.model)[0])
             outputDir = os.path.join(*path[:-1], path[-1].capitalize())
