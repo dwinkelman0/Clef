@@ -21,6 +21,7 @@ class Serial : public Clef::If::RWSerial {
   void writeChar(const char c) override;
   void writeStr(const char *str) override;
   void writeLine(const char *line) override;
+  void writeUint64(const uint64_t x) override;
 
   /**
    * Provide characters for the consumer of this serial interface to read.

@@ -25,7 +25,11 @@ class Sensor {
   };
 
  public:
-  using Time = Clef::Util::Time<float, Clef::Util::TimeUnit::USEC>;
+  /**
+   * It is important that time be an integer so that it maintains precision at
+   * high values.
+   */
+  using Time = Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC>;
   struct DataPoint {
     Time time;
     DType data;
@@ -38,20 +42,31 @@ class Sensor {
         staged_({0, 0}) {}
 
   /**
+   * Register a subscriber. Return a token that can be used when checking out
+   * and releasing.
+   */
+  uint8_t subscribe() {
+    uint8_t nextActiveSubsribers = (activeSubscribers_ << 1) | 1;
+    uint8_t token = nextActiveSubsribers ^ activeSubscribers_;
+    activeSubscribers_ = nextActiveSubsribers;
+    return token;
+  }
+
+  /**
    * Provide a data point from an external source.
    */
   void inject(DType data) {
-    DataPoint dataPoint = {*clock_.getMicros(), data};
+    DataPoint dataPoint({*clock_.getMicros(), data});
     Clef::If::DisableInterrupts noInterrupts;
     switch (state_) {
       case State::NO_DATA:
         current_ = dataPoint;
         state_ = State::DATA_READY;
-        onCurrentUpdate(current_);
+        onNewDataLoad();
         break;
       case State::DATA_READY:
         current_ = dataPoint;
-        onCurrentUpdate(current_);
+        onNewDataLoad();
         break;
       case State::CHECKED_OUT:
         staged_ = dataPoint;
@@ -66,12 +81,29 @@ class Sensor {
   /**
    * Transition the sensor to a state in which it is safe to read.
    */
-  bool checkOut() {
+  bool checkOut(const uint8_t token) {
     Clef::If::DisableInterrupts noInterrupts;
     switch (state_) {
+      case State::NO_DATA:
+        return false;
       case State::DATA_READY:
-        state_ = State::CHECKED_OUT;
-        return true;
+        if (~checkedOutSubscribers_ & token) {
+          // Allow checkout only if this token has not already been used
+          state_ = State::CHECKED_OUT;
+          checkedOutSubscribers_ |= token;
+          return true;
+        } else {
+          return false;
+        }
+      case State::CHECKED_OUT:
+      case State::CHECKED_OUT_AND_STAGED:
+        if (~checkedOutSubscribers_ & token) {
+          // Allow checkout only if this token has not already been used
+          checkedOutSubscribers_ |= token;
+          return true;
+        } else {
+          return false;
+        }
       default:
         return false;
     }
@@ -81,16 +113,31 @@ class Sensor {
    * Transition the sensor out of the state in which it is safe to read so that
    * the readable data can be refreshed.
    */
-  void release() {
+  void release(const uint8_t token) {
     Clef::If::DisableInterrupts noInterrupts;
     switch (state_) {
       case State::CHECKED_OUT:
-        state_ = State::NO_DATA;
+        releasedSubscribers_ |= token;
+        if (releasedSubscribers_ == activeSubscribers_) {
+          // If all subscribers have seen the data, throw out
+          state_ = State::NO_DATA;
+        } else if (releasedSubscribers_ == checkedOutSubscribers_) {
+          // If not all subscribers have seen the data but none are actively
+          // looking, go back to DATA_READY
+          state_ = State::DATA_READY;
+        }
+        // If there are still subscribers looking at the data, do nothing
         break;
       case State::CHECKED_OUT_AND_STAGED:
-        current_ = staged_;
-        state_ = State::DATA_READY;
-        onCurrentUpdate(current_);
+        releasedSubscribers_ |= token;
+        if (releasedSubscribers_ == checkedOutSubscribers_) {
+          // If not all subscribers have seen the data but none are actively
+          // looking, load the new data
+          current_ = staged_;
+          state_ = State::DATA_READY;
+          onNewDataLoad();
+        }
+        // If there are still subscribers looking at the data, do nothing
         break;
       default:
         break;
@@ -109,8 +156,17 @@ class Sensor {
   DataPoint read() const { return current_; }
 
  private:
+  void onNewDataLoad() {
+    checkedOutSubscribers_ = 0;
+    releasedSubscribers_ = 0;
+    onCurrentUpdate(current_);
+  }
+
   Clef::If::Clock &clock_;
   State state_;
+  uint8_t activeSubscribers_;
+  uint8_t checkedOutSubscribers_;
+  uint8_t releasedSubscribers_;
   DataPoint current_;
   DataPoint staged_;
 };
@@ -155,6 +211,8 @@ class DisplacementSensor
 
   AxisFeedrate readFeedrate() const { return currentFeedrate_; }
 
+  typename SensorIf::Time getMeasurementTime() const { return read().time; }
+
  protected:
   void onCurrentUpdate(const DataPoint dataPoint) override {
     if (lastDataPoint_.time > 0) {
@@ -164,7 +222,7 @@ class DisplacementSensor
               SensorAnalogPosition(dataPoint.data - lastDataPoint_.data)),
           Clef::Util::Time<float, Clef::Util::TimeUnit::MIN>(
               Clef::Util::Time<float, Clef::Util::TimeUnit::USEC>(
-                  dataPoint.time - lastDataPoint_.time)));
+                  *(dataPoint.time - lastDataPoint_.time))));
       currentFeedrate_ = currentFeedrate_ * (1 - lowPassFilterCoefficient_) +
                          newFeedrate * lowPassFilterCoefficient_;
     }
@@ -185,6 +243,58 @@ class DisplacementSensor
  private:
   AxisFeedrate currentFeedrate_;
   DataPoint lastDataPoint_;
+  float lowPassFilterCoefficient_;
+};
+
+/**
+ * Pressure is a dimensionless unit since there is no need for conversions and
+ * the numbers from the sensor have no physical interpretation.
+ */
+class PressureSensor : public Sensor<uint16_t> {
+ public:
+  PressureSensor(Clef::If::Clock &clock, const float lowPassFilterCoefficient)
+      : Sensor<uint16_t>(clock),
+        currentPressure_(0),
+        lowPassFilterCoefficient_(lowPassFilterCoefficient) {}
+
+  /**
+   * Inject wrapper is tailored for the SPI callback format.
+   */
+  static void injectWrapper(const uint16_t numData, const char *const data,
+                            void *arg) {
+    if (static_cast<uint8_t>(data[0]) & 0x80) {
+      // Either a fault or stale data.
+      return;
+    }
+    PressureSensor *sensor = reinterpret_cast<PressureSensor *>(arg);
+    uint16_t hi = static_cast<uint16_t>(static_cast<uint8_t>(data[0]));
+    uint16_t lo = static_cast<uint16_t>(static_cast<uint8_t>(data[1]));
+    uint16_t rawData = ((hi << 8) | lo) & static_cast<uint16_t>(0x3fff);
+    sensor->inject(rawData);
+  }
+
+  float readPressure() const { return currentPressure_; }
+
+  typename Sensor<uint16_t>::Time getMeasurementTime() const {
+    return read().time;
+  }
+
+ protected:
+  void onCurrentUpdate(const DataPoint dataPoint) override {
+    currentPressure_ =
+        currentPressure_ * (1 - lowPassFilterCoefficient_) +
+        static_cast<float>(dataPoint.data) * lowPassFilterCoefficient_;
+  }
+
+ private:
+  /**
+   * Make the underlying read() function private since it does not have
+   * filtering.
+   */
+  DataPoint read() const { return Sensor<uint16_t>::read(); }
+
+ private:
+  float currentPressure_;
   float lowPassFilterCoefficient_;
 };
 }  // namespace Clef::Fw

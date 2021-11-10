@@ -41,8 +41,10 @@ class Caliper : public Clef::If::SensorInput<typename Config::Position> {
         if (~caliper->rawData_ & (static_cast<uint32_t>(1) << 20)) {
           output = -output;
         }
+        // Flip the sign of the measurement so that increasing displacement
+        // matches increasing extrusion
         caliper->conversionCallback_(
-            typename Config::Position(static_cast<float>(output) / 100),
+            typename Config::Position(static_cast<float>(-output) / 100),
             caliper->conversionCallbackData_);
       }
     }
@@ -56,6 +58,8 @@ class Caliper : public Clef::If::SensorInput<typename Config::Position> {
     caliper->rawData_ =
         (caliper->rawData_ | (static_cast<uint32_t>(newBit) << 24)) >> 1;
     caliper->numRawDataBits_++;
+
+    // PwmTimer::enable() resets the counter
     caliper->pwmTimer_.enable();
   }
 

@@ -18,6 +18,7 @@ class IntegrationFixture : public testing::Test {
   Clef::Impl::Emulator::Clock clock_;
   Clef::Impl::Emulator::Serial serial_;
   ActionQueue actionQueue_;
+  XYEPositionQueue xyePositionQueue_;
   GcodeParser parser_;
   Clef::Impl::Emulator::GenericTimer xAxisTimer_;
   Clef::Impl::Emulator::GenericTimer yAxisTimer_;
@@ -26,6 +27,8 @@ class IntegrationFixture : public testing::Test {
   Clef::Impl::Emulator::DisplacementSensorInput displacementSensorInput_;
   DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>
       displacementSensor_;
+  PressureSensor pressureSensor_;
+  LinearExtrusionPredictor extrusionPredictor_;
   Axes::XAxis xAxis_;
   Axes::YAxis yAxis_;
   Axes::ZAxis zAxis_;

@@ -28,22 +28,24 @@ class SensorTest : public testing::Test, public Sensor<float> {
   bool receivedUpdate_;
 };
 
-TEST_F(SensorTest, StateTransitions) {
+TEST_F(SensorTest, SingleSubscriber) {
+  uint8_t token = subscribe();
+
   // Start in NULL state
-  ASSERT_FALSE(checkOut());
+  ASSERT_FALSE(checkOut(token));
 
   // Transition to DATA_READY state
   inject(1.0f);
   checkReceivedUpdate();
 
   // Transition to CHECKED_OUT state
-  ASSERT_TRUE(checkOut());
+  ASSERT_TRUE(checkOut(token));
   ASSERT_EQ(read().data, 1.0f);
   Time t0 = read().time;
 
   // Transition to NULL state
-  release();
-  ASSERT_FALSE(checkOut());
+  release(token);
+  ASSERT_FALSE(checkOut(token));
 
   // Transition to DATA_READY state
   inject(-10.0f);
@@ -52,7 +54,7 @@ TEST_F(SensorTest, StateTransitions) {
   checkReceivedUpdate();
 
   // Transition to CHECKED_OUT state
-  ASSERT_TRUE(checkOut());
+  ASSERT_TRUE(checkOut(token));
   ASSERT_FALSE(receivedUpdate_);
   ASSERT_EQ(read().data, 2.0f);
   Time t1 = read().time;
@@ -66,18 +68,109 @@ TEST_F(SensorTest, StateTransitions) {
   ASSERT_EQ(read().data, 2.0f);
 
   // Transition to DATA_READY state
-  release();
+  release(token);
   checkReceivedUpdate();
 
   // Transition to CHECKED_OUT state
-  ASSERT_TRUE(checkOut());
+  ASSERT_TRUE(checkOut(token));
   ASSERT_EQ(read().data, 3.0f);
   Time t2 = read().time;
   ASSERT_GE(t2, t1);
 
   // Transition to NULL state
-  release();
-  ASSERT_FALSE(checkOut());
+  release(token);
+  ASSERT_FALSE(checkOut(token));
+}
+
+TEST_F(SensorTest, MultipleSubscribers) {
+  uint8_t token1 = subscribe();
+  uint8_t token2 = subscribe();
+
+  // Start in NULL state
+  ASSERT_FALSE(checkOut(token1));
+  ASSERT_FALSE(checkOut(token2));
+
+  // Transition to DATA_READY state
+  inject(1.0f);
+  checkReceivedUpdate();
+
+  // Transition to CHECKED_OUT state
+  ASSERT_TRUE(checkOut(token1));
+  ASSERT_EQ(read().data, 1.0f);
+
+  // Transition to DATA_READY state and not be able to check out same token
+  release(token1);
+  ASSERT_FALSE(checkOut(token1));
+  
+  // Transition to CHECKED_OUT state
+  ASSERT_TRUE(checkOut(token2));
+  ASSERT_EQ(read().data, 1.0f);
+
+  // Transition to NULL state
+  release(token2);
+  ASSERT_FALSE(checkOut(token1));
+
+  // Transition to DATA_READY state
+  inject(-10.0f);
+  checkReceivedUpdate();
+  inject(2.0f);
+  checkReceivedUpdate();
+
+  // Transition to CHECKED_OUT state
+  ASSERT_TRUE(checkOut(token1));
+  ASSERT_TRUE(checkOut(token2));
+  ASSERT_EQ(read().data, 2.0f);
+
+  // Transition to NULL state
+  release(token1);
+  release(token2);
+  ASSERT_FALSE(checkOut(token1));
+
+  // Transition to DATA_READY state
+  inject(3.0f);
+  checkReceivedUpdate();
+
+  // Transition to CHECKED_OUT state
+  ASSERT_TRUE(checkOut(token1));
+  ASSERT_EQ(read().data, 3.0f);
+
+  // Transition to CHECKED_OUT_AND_STAGED state
+  inject(10.0f);
+  ASSERT_FALSE(receivedUpdate_);
+  inject(4.0f);
+  ASSERT_FALSE(receivedUpdate_);
+
+  // Transition to DATA_READY state
+  release(token1);
+  checkReceivedUpdate();
+
+  // Transition to CHECKED_OUT state
+  ASSERT_TRUE(checkOut(token1));
+  ASSERT_EQ(read().data, 4.0f);
+
+  // Transition to CHECKED_OUT_AND_STAGED state
+  inject(5.0f);
+  ASSERT_FALSE(receivedUpdate_);
+
+  // Stay in CHECKED_OUT_AND_STAGED state
+  checkOut(token2);
+  release(token1);
+  ASSERT_FALSE(receivedUpdate_);
+  ASSERT_EQ(read().data, 4.0f);
+
+  // Transition to DATA_READY state
+  release(token2);
+  checkReceivedUpdate();
+
+  // Transition to CHECKED_OUT state
+  checkOut(token1);
+  checkOut(token2);
+  ASSERT_EQ(read().data, 5.0f);
+
+  // Transition to NULL state
+  release(token2);
+  release(token1);
+  ASSERT_FALSE(checkOut(token1));
 }
 
 class DisplacementSensorTest
@@ -93,13 +186,14 @@ class DisplacementSensorTest
 };
 
 TEST_F(DisplacementSensorTest, Filtering) {
-  Time t0(1.0f);
-  Time t1(2.0f);
+  Time t0(1000);
+  Time t1(2000);
   SensorAnalogPosition x0(1.0f);
   SensorAnalogPosition x1(2.0f);
   AxisFeedrate speed(
       AxisPosition(*SensorUstepsPosition(SensorAnalogPosition(x1 - x0))),
-      Clef::Util::Time<float, Clef::Util::TimeUnit::MIN>(Time(t1 - t0)));
+      Clef::Util::Time<float, Clef::Util::TimeUnit::MIN>(
+          Clef::Util::Time<float, Clef::Util::TimeUnit::USEC>(*(t1 - t0))));
   this->onCurrentUpdate({t0, x0});
   this->onCurrentUpdate({t1, x1});
   EXPECT_LT(abs(*readFeedrate() - *speed / 10), 1);

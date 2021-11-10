@@ -12,7 +12,7 @@ set (Target_fw_atmega2560 clef-atmega2560)
 
 include_directories (src)
 
-file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc)
+file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc src/fw/kalman/*.cc)
 
 if (${CLEF_TARGET} MATCHES "atmega2560")
     # Build Atmega2560 firmware
@@ -24,6 +24,7 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
     find_program (AVR_OBJCOPY avr-objcopy REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
     find_program (AVR_SIZE_TOOL avr-size REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
     find_program (AVR_OBJDUMP avr-objdump REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
+    find_program (AVR_NM avr-nm REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
     find_program (AVRDUDE avrdude REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
 
     set (CMAKE_SYSTEM_NAME Generic)
@@ -45,7 +46,7 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
     set_target_properties (
         ${elf_file}
         PROPERTIES
-            COMPILE_FLAGS "-mmcu=atmega2560 -Os -flto -D F_CPU=16000000L -Wall"
+            COMPILE_FLAGS "-mmcu=atmega2560 -Os -flto -D F_CPU=16000000L -Wall -D TARGET_AVR"
             LINK_FLAGS "-mmcu=atmega2560"
     )
     add_custom_command (
@@ -80,6 +81,11 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
         ALL ${AVR_SIZE_TOOL} -C --mcu=atmega2560 ${elf_file}
         DEPENDS ${elf_file}
     )
+    # add_custom_target (
+    #     ${Target_fw_atmega2560}-mem
+    #     ALL ${AVR_NM} --defined-only --line-numbers --size-sort -S ${elf_file}
+    #     DEPENDS ${elf_file}
+    # )
     if (DEFINED CLEF_PORT AND DEFINED CLEF_BAUD)
         add_custom_target(
             ${Target_fw_atmega2560}-upload-hex

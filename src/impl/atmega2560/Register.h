@@ -35,6 +35,7 @@ namespace Clef::Impl::Atmega2560 {
     static void init() {                                                      \
       REG2(DDR, P) &= ~(1 << REG3(PIN, P, N)); /*!< Set this pin as input. */ \
     }                                                                         \
+    static void setPullUp() { REG2(PORT, P) |= 1 << REG3(PORT, P, N); }       \
     static bool read() { return REG2(PIN, P) & (1 << REG3(PIN, P, N)); }      \
   }
 
@@ -75,34 +76,4 @@ namespace Clef::Impl::Atmega2560 {
       NAME::callback_(NAME::callbackData_);                      \
     }                                                            \
   }
-
-/**
- * Readable boolean register as part of a group of registers which share the
- * same on-change interrupts.
- */
-#define RINTGROUP_REGISTER_BOOL(P, N, INT_GROUP, INT_INDEX)                    \
-  {                                                                            \
-   public:                                                                     \
-    static void init() {                                                       \
-      REG2(DDR, P) &= ~(1 << REG3(PIN, P, N)); /*!< Set this pin as input. */  \
-      PCICR |=                                                                 \
-          1 << REG2(                                                           \
-              PCIE,                                                            \
-              INT_GROUP); /*!< Enable interrupts for this group of pins. */    \
-      REG2(PCMSK, INT_GROUP) |=                                                \
-          1 << INT_INDEX; /*!< Enable interrupts for this pin. */              \
-    }                                                                          \
-    static bool read() { return REG2(PIN, P) & (1 << REG3(PIN, P, N)); }       \
-    static void setGroupChangeCallback(void (*callback)(void *), void *data) { \
-      groupChangeCallback_ = callback;                                         \
-      callbackData_ = data;                                                    \
-    }                                                                          \
-                                                                               \
-   private:                                                                    \
-    static void (*groupChangeCallback_)(void *);                               \
-    static void *callbackData_;                                                \
-  }
-
-class WPin8 W_REGISTER_BOOL(H, 5, false);
-class RIntGroupPinA15 RINTGROUP_REGISTER_BOOL(K, 7, 2, 7);
 }  // namespace Clef::Impl::Atmega2560

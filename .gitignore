@@ -5,6 +5,13 @@
 !**/*.h
 !**/CMakeLists.txt
 !**/*.cmake
+!**/*.py
 !.gitignore
 
 build-*
+**/data-*
+**/kalman-*
+**/gcode
+**/select
+**/models/*.cc
+**/models/*.h

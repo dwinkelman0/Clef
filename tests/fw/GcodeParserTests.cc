@@ -11,7 +11,7 @@ class GcodeParserTest : public IntegrationFixture {
    * Send a minimal valid G-Code command.
    */
   void doBasic() {
-    Axes::XYZEPosition startPosition = actionQueue_.getEndPosition();
+    XYZEPosition startPosition = actionQueue_.getEndPosition();
     serial_.inject("G1 X80\n");
     parser_.ingest(context_);
     checkBasic(startPosition);
@@ -20,13 +20,13 @@ class GcodeParserTest : public IntegrationFixture {
   /**
    * Perform checks and cleanup for doBasic().
    */
-  void checkBasic(Axes::XYZEPosition origStartPosition) {
+  void checkBasic(XYZEPosition origStartPosition) {
     ASSERT_EQ(serial_.extract(), "ok\n");
     ASSERT_EQ(actionQueue_.size(), 1);
     ASSERT_TRUE(actionQueue_.checkConservation());
     ActionQueue::Iterator it = actionQueue_.first();
     ASSERT_EQ((*it)->getType(), Action::Type::MOVE_XY);
-    Axes::XYZEPosition endPosition = (*it)->getEndPosition();
+    XYZEPosition endPosition = (*it)->getEndPosition();
     ASSERT_EQ(*endPosition.x, 80);
     ASSERT_EQ(endPosition.y, origStartPosition.y);
     ASSERT_EQ(endPosition.z, origStartPosition.z);
@@ -39,7 +39,7 @@ class GcodeParserTest : public IntegrationFixture {
 TEST_F(GcodeParserTest, Basic) { doBasic(); }
 
 TEST_F(GcodeParserTest, Comments) {
-  Axes::XYZEPosition startPosition = actionQueue_.getEndPosition();
+  XYZEPosition startPosition = actionQueue_.getEndPosition();
   serial_.inject(";this comment is a whole line\n");
   parser_.ingest(context_);
   ASSERT_EQ(serial_.extract(), "");
@@ -97,7 +97,7 @@ TEST_F(GcodeParserTest, ParseFloat) {
   ASSERT_EQ(serial_.extract(), "ok\n");
   ActionQueue::Iterator it = actionQueue_.first();
   ASSERT_EQ((*it)->getType(), Action::Type::MOVE_XY);
-  Axes::XYZEPosition endPosition = (*it)->getEndPosition();
+  XYZEPosition endPosition = (*it)->getEndPosition();
   ASSERT_FLOAT_EQ(*endPosition.x, 80.5);
   actionQueue_.pop(context_);
 }
@@ -108,7 +108,7 @@ TEST_F(GcodeParserTest, G1_XY) {
   ASSERT_EQ(serial_.extract(), "ok\n");
   ActionQueue::Iterator it = actionQueue_.first();
   ASSERT_EQ((*it)->getType(), Action::Type::MOVE_XY);
-  Axes::XYZEPosition endPosition = (*it)->getEndPosition();
+  XYZEPosition endPosition = (*it)->getEndPosition();
   ASSERT_EQ(*endPosition.x, 40);
   ASSERT_EQ(*endPosition.y, 30);
   actionQueue_.pop(context_);
@@ -122,13 +122,13 @@ TEST_F(GcodeParserTest, G1_XYE) {
   ASSERT_EQ(actionQueue_.size(), 1);
   ActionQueue::Iterator it = actionQueue_.last();
   ASSERT_EQ((*it)->getType(), Action::Type::MOVE_XYE);
-  Axes::XYZEPosition endPosition = (*it)->getEndPosition();
+  XYZEPosition endPosition = (*it)->getEndPosition();
   ASSERT_EQ(*endPosition.x, 40);
   ASSERT_EQ(*endPosition.y, 0);
   ASSERT_EQ(*endPosition.e, 2);
   ASSERT_EQ(dynamic_cast<Action::MoveXYE *>(*it)->getNumPointsPushed(), 1);
   ASSERT_EQ(context_.xyePositionQueue.size(), 1);
-  Axes::XYEPosition xyePosition1 = *context_.xyePositionQueue.last();
+  XYEPosition xyePosition1 = *context_.xyePositionQueue.last();
   ASSERT_EQ(*xyePosition1.x, 40);
   ASSERT_EQ(*xyePosition1.y, 0);
   ASSERT_EQ(*xyePosition1.e, 2);
@@ -144,21 +144,21 @@ TEST_F(GcodeParserTest, G1_XYE) {
   ASSERT_FLOAT_EQ(*endPosition.e, 2.00002);
   ASSERT_EQ(dynamic_cast<Action::MoveXYE *>(*it)->getNumPointsPushed(), 2);
   ASSERT_EQ(context_.xyePositionQueue.size(), 2);
-  Axes::XYEPosition xyePosition2 = *context_.xyePositionQueue.last();
+  XYEPosition xyePosition2 = *context_.xyePositionQueue.last();
   ASSERT_EQ(*xyePosition2.x, 80);
   ASSERT_EQ(*xyePosition2.y, 60);
   ASSERT_FLOAT_EQ(*xyePosition2.e, 2.00002);
 
   // Send a non-XYE point
-  serial_.inject("G1 X0 Y0\n");
+  serial_.inject("G1 X33 Y44\n");
   parser_.ingest(context_);
   ASSERT_EQ(serial_.extract(), "ok\n");
   ASSERT_EQ(actionQueue_.size(), 2);
   it = actionQueue_.last();
   ASSERT_EQ((*it)->getType(), Action::Type::MOVE_XY);
   endPosition = (*it)->getEndPosition();
-  ASSERT_EQ(*endPosition.x, 0);
-  ASSERT_EQ(*endPosition.y, 0);
+  ASSERT_EQ(*endPosition.x, 33);
+  ASSERT_EQ(*endPosition.y, 44);
   ASSERT_FLOAT_EQ(*endPosition.e, 2.00002);
   ASSERT_EQ(context_.xyePositionQueue.size(), 2);
 
@@ -175,15 +175,21 @@ TEST_F(GcodeParserTest, G1_XYE) {
   ASSERT_EQ(*endPosition.e, 6);
   ASSERT_EQ(dynamic_cast<Action::MoveXYE *>(*it)->getNumPointsPushed(), 1);
   ASSERT_EQ(context_.xyePositionQueue.size(), 3);
-  Axes::XYEPosition xyePosition3 = *context_.xyePositionQueue.last();
+  XYEPosition xyePosition3 = *context_.xyePositionQueue.last();
   ASSERT_EQ(*xyePosition3.x, 30);
   ASSERT_EQ(*xyePosition3.y, 30);
   ASSERT_EQ(*xyePosition3.e, 6);
 
   // Clean up
   actionQueue_.pop(context_);
+  ASSERT_EQ(*actionQueue_.getStartPosition().x, 80);
+  ASSERT_EQ(*actionQueue_.getStartPosition().y, 60);
   actionQueue_.pop(context_);
+  ASSERT_EQ(*actionQueue_.getStartPosition().x, 33);
+  ASSERT_EQ(*actionQueue_.getStartPosition().y, 44);
   actionQueue_.pop(context_);
+  ASSERT_EQ(*actionQueue_.getStartPosition().x, 30);
+  ASSERT_EQ(*actionQueue_.getStartPosition().y, 30);
   context_.xyePositionQueue.pop();
   context_.xyePositionQueue.pop();
   context_.xyePositionQueue.pop();
@@ -197,13 +203,13 @@ TEST_F(GcodeParserTest, G1_XYE_Aliasing) {
   ASSERT_EQ(actionQueue_.size(), 1);
   ActionQueue::Iterator it = actionQueue_.last();
   ASSERT_EQ((*it)->getType(), Action::Type::MOVE_XYE);
-  Axes::XYZEPosition endPosition = (*it)->getEndPosition();
+  XYZEPosition endPosition = (*it)->getEndPosition();
   ASSERT_EQ(*endPosition.x, 40);
   ASSERT_EQ(*endPosition.y, 30);
   ASSERT_EQ(*endPosition.e, 2);
   ASSERT_EQ(dynamic_cast<Action::MoveXYE *>(*it)->getNumPointsPushed(), 1);
   ASSERT_EQ(context_.xyePositionQueue.size(), 1);
-  Axes::XYEPosition xyePosition1 = *context_.xyePositionQueue.last();
+  XYEPosition xyePosition1 = *context_.xyePositionQueue.last();
   ASSERT_EQ(*xyePosition1.x, 40);
   ASSERT_EQ(*xyePosition1.y, 30);
   ASSERT_EQ(*xyePosition1.e, 2);
@@ -219,7 +225,7 @@ TEST_F(GcodeParserTest, G1_XYE_Direction) {
   ASSERT_EQ(actionQueue_.size(), 3);
   ActionQueue::Iterator it1 = actionQueue_.first();
   ASSERT_EQ((*it1)->getType(), Action::Type::MOVE_XYE);
-  Axes::XYZEPosition endPosition = (*it1)->getEndPosition();
+  XYZEPosition endPosition = (*it1)->getEndPosition();
   ASSERT_EQ(*endPosition.x, 40);
   ASSERT_EQ(*endPosition.y, 30);
   ASSERT_EQ(*endPosition.e, 3);
@@ -244,7 +250,7 @@ TEST_F(GcodeParserTest, G1_E) {
   ASSERT_EQ(serial_.extract(), "ok\n");
   ActionQueue::Iterator it = actionQueue_.first();
   ASSERT_EQ((*it)->getType(), Action::Type::MOVE_E);
-  Axes::XYZEPosition endPosition = (*it)->getEndPosition();
+  XYZEPosition endPosition = (*it)->getEndPosition();
   ASSERT_EQ(*endPosition.e, 5);
   actionQueue_.pop(context_);
 }
@@ -255,7 +261,7 @@ TEST_F(GcodeParserTest, G1_Z) {
   ASSERT_EQ(serial_.extract(), "ok\n");
   ActionQueue::Iterator it = actionQueue_.first();
   ASSERT_EQ((*it)->getType(), Action::Type::MOVE_Z);
-  Axes::XYZEPosition endPosition = (*it)->getEndPosition();
+  XYZEPosition endPosition = (*it)->getEndPosition();
   ASSERT_EQ(*endPosition.z, -10);
   actionQueue_.pop(context_);
 }
@@ -265,9 +271,9 @@ TEST_F(GcodeParserTest, G1_F) {
   parser_.ingest(context_);
   ActionQueue::Iterator it = actionQueue_.first();
   ASSERT_EQ((*it)->getType(), Action::Type::SET_FEEDRATE);
-  ASSERT_EQ((*it)->getEndPosition(), (Axes::XYZEPosition{0, 0, 0, 0}));
+  ASSERT_EQ((*it)->getEndPosition(), (XYZEPosition{0, 0, 0, 0}));
   actionQueue_.pop(context_);
-  checkBasic(Axes::XYZEPosition{0, 0, 0, 0});
+  checkBasic(XYZEPosition{0, 0, 0, 0});
 }
 
 TEST_F(GcodeParserTest, UndefinedCodeLetter) {

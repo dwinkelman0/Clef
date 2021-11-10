@@ -2,7 +2,7 @@
 
 #include "GcodeParser.h"
 
-#include <if/String.h>
+#include <if/Memory.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,6 +70,7 @@ void GcodeParser::ingest(Context &context) {
 
 void GcodeParser::reset() {
   head_ = buffer_;
+  *head_ = '\0';
   commentMode_ = false;
   memset(buckets_, 0, sizeof(buckets_));
   memset(buffer_, 0, sizeof(buffer_));
@@ -231,11 +232,13 @@ bool GcodeParser::handleG1(Context &context, const uint16_t errorBufferSize,
         // If the last action in the queue is MoveXYE and the extrusion
         // destination is in the same direction as the current extrusion,
         // coalesce
+        context.serial.writeLine(";Push XYE point");
         static_cast<Action::MoveXYE *>(*lastAction)
             ->pushPoint(context, hasX ? &xMms : nullptr, hasY ? &yMms : nullptr,
                         eMms);
       } else {
         // Otherwise, start a new MoveXYE
+        context.serial.writeLine(";Push XYE fresh");
         Action::MoveXYE moveXye(context.actionQueue.getEndPosition());
         moveXye.pushPoint(context, hasX ? &xMms : nullptr,
                           hasY ? &yMms : nullptr, eMms);
@@ -244,12 +247,14 @@ bool GcodeParser::handleG1(Context &context, const uint16_t errorBufferSize,
         }
       }
     } else {
+      context.serial.writeLine(";Push XY");
       context.actionQueue.push(
           context,
           Action::MoveXY(context.actionQueue.getEndPosition(),
                          hasX ? &xMms : nullptr, hasY ? &yMms : nullptr));
     }
   } else if (hasE) {
+    context.serial.writeLine(";Push E");
     context.actionQueue.push(
         context, Action::MoveE(context.actionQueue.getEndPosition(), e));
   }

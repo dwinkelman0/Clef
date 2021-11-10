@@ -623,8 +623,8 @@
 			"ld r24, Z+ \n\t"
 			"and r24, r24 \n\t" // test for NULL
 			"breq skip_loop_%= \n\t"
-			"rcall uart0_putc \n\t" // Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart0_putc \n\t" // Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 		
 			: // outputs
@@ -658,8 +658,8 @@
 			"cp %[counter], r30\n\t"
 			"breq skip_loop_%= \n\t"
 			"ld r24, Z+ \n\t"
-			"rcall uart0_putc \n\t" // counter and Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart0_putc \n\t" // counter and Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 		
 			: // outputs
@@ -696,8 +696,8 @@
 			"lpm r24, Z+ \n\t"
 			"and r24, r24 \n\t" // test for NULL
 			"breq skip_loop_%= \n\t"
-			"rcall uart0_putc \n\t" // Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart0_putc \n\t" // Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 		
 			: // outputs
@@ -1270,8 +1270,8 @@
 			"ld r24, Z+ \n\t"
 			"and r24, r24 \n\t" // test for NULL
 			"breq skip_loop_%= \n\t"
-			"rcall uart1_putc \n\t" // Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart1_putc \n\t" // Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 		
 			: // outputs
@@ -1299,8 +1299,8 @@
 			"cp %[counter], r30\n\t"
 			"breq skip_loop_%= \n\t"
 			"ld r24, Z+ \n\t"
-			"rcall uart1_putc \n\t" // counter and Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart1_putc \n\t" // counter and Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 		
 			: // outputs
@@ -1329,8 +1329,8 @@
 			"lpm r24, Z+ \n\t"
 			"and r24, r24 \n\t" // test for NULL
 			"breq skip_loop_%= \n\t"
-			"rcall uart1_putc \n\t" // Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart1_putc \n\t" // Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 	
 			: // outputs
@@ -1809,8 +1809,8 @@
 			"ld r24, Z+ \n\t"
 			"and r24, r24 \n\t" // test for NULL
 			"breq skip_loop_%= \n\t"
-			"rcall uart2_putc \n\t" // Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart2_putc \n\t" // Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 		
 			: // outputs
@@ -1838,8 +1838,8 @@
 			"cp %[counter], r30\n\t"
 			"breq skip_loop_%= \n\t"
 			"ld r24, Z+ \n\t"
-			"rcall uart2_putc \n\t" // counter and Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart2_putc \n\t" // counter and Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 		
 			: // outputs
@@ -1868,8 +1868,8 @@
 			"lpm r24, Z+ \n\t"
 			"and r24, r24 \n\t" // test for NULL
 			"breq skip_loop_%= \n\t"
-			"rcall uart2_putc \n\t" // Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart2_putc \n\t" // Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 	
 			: // outputs
@@ -2349,8 +2349,8 @@
 			"ld r24, Z+ \n\t"
 			"and r24, r24 \n\t" // test for NULL
 			"breq skip_loop_%= \n\t"
-			"rcall uart3_putc \n\t" // Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart3_putc \n\t" // Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 		
 			: // outputs
@@ -2378,8 +2378,8 @@
 			"cp %[counter], r30\n\t"
 			"breq skip_loop_%= \n\t"
 			"ld r24, Z+ \n\t"
-			"rcall uart3_putc \n\t" // counter and Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart3_putc \n\t" // counter and Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 		
 			: // outputs
@@ -2408,8 +2408,8 @@
 			"lpm r24, Z+ \n\t"
 			"and r24, r24 \n\t" // test for NULL
 			"breq skip_loop_%= \n\t"
-			"rcall uart3_putc \n\t" // Z pointer will not be affected in uart_putc()
-			"rjmp load_loop_%= \n\t"
+			"call uart3_putc \n\t" // Z pointer will not be affected in uart_putc()
+			"jmp load_loop_%= \n\t"
 		"skip_loop_%=:"
 	
 			: // outputs

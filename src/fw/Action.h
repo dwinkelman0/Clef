@@ -9,8 +9,7 @@
 #include <util/Units.h>
 
 namespace Clef::Fw {
-class XYEPositionQueue
-    : public Clef::Util::PooledQueue<Axes::XYEPosition, 128> {};
+class XYEPositionQueue : public Clef::Util::PooledQueue<XYEPosition, 128> {};
 
 class ActionQueue;
 class GcodeParser;
@@ -28,9 +27,9 @@ class Action {
   friend class Clef::Fw::ActionQueue;
 
  public:
-  Action(const Type type, const Axes::XYZEPosition &startPosition);
+  Action(const Type type, const XYZEPosition &startPosition);
   Type getType() const { return type_; }
-  Axes::XYZEPosition getEndPosition() const;
+  XYZEPosition getEndPosition() const;
 
   /**
    * Executed when the action reaches the front of the queue and becomes active.
@@ -61,13 +60,13 @@ class Action {
 
  protected:
   Type type_;
-  Axes::XYZEPosition endPosition_;
+  XYZEPosition endPosition_;
 };
 
 class MoveXY : public Action {
  public:
   MoveXY() : MoveXY({0, 0, 0, 0}, nullptr, nullptr) {}
-  MoveXY(const Axes::XYZEPosition &startPosition,
+  MoveXY(const XYZEPosition &startPosition,
          const Axes::XAxis::GcodePosition *const endPositionX,
          const Axes::YAxis::GcodePosition *const endPositionY);
 
@@ -83,7 +82,7 @@ class MoveXY : public Action {
 class MoveXYE : public Action {
  public:
   MoveXYE() : MoveXYE({0, 0, 0, 0}) {}
-  MoveXYE(const Axes::XYZEPosition &startPosition);
+  MoveXYE(const XYZEPosition &startPosition);
 
   /**
    * Add a point in the extrusion path; returns false if there was not room in
@@ -114,7 +113,7 @@ class MoveXYE : public Action {
   void onPop(Context &context) override;
 
  private:
-  Axes::EAxis::GcodePosition startEPosition_;
+  XYEPosition segmentStart_;
   uint32_t numPointsPushed_;
   uint32_t numPointsCompleted_;
   bool hasNewEndPosition_;
@@ -123,7 +122,7 @@ class MoveXYE : public Action {
 class MoveE : public Action {
  public:
   MoveE() : MoveE({0, 0, 0, 0}, 0) {}
-  MoveE(const Axes::XYZEPosition &startPosition,
+  MoveE(const XYZEPosition &startPosition,
         const Axes::EAxis::GcodePosition endPositionE);
 
   void onStart(Context &context) override;
@@ -138,7 +137,7 @@ class MoveE : public Action {
 class MoveZ : public Action {
  public:
   MoveZ() : MoveZ({0, 0, 0, 0}, 0) {}
-  MoveZ(const Axes::XYZEPosition &startPosition,
+  MoveZ(const XYZEPosition &startPosition,
         const Axes::ZAxis::GcodePosition endPositionZ);
 
   void onStart(Context &context) override;
@@ -153,7 +152,7 @@ class MoveZ : public Action {
 class SetFeedrate : public Action {
  public:
   SetFeedrate() : SetFeedrate({0, 0, 0, 0}, 1200) {}
-  SetFeedrate(const Axes::XYZEPosition &startPosition,
+  SetFeedrate(const XYZEPosition &startPosition,
               const float rawFeedrateMmPerMin);
 
   void onStart(Context &context) override;
@@ -175,7 +174,7 @@ struct Context {
   Clef::If::Clock &clock;
   Clef::If::RWSerial &serial;
   Clef::Fw::ActionQueue &actionQueue;
-  Clef::Fw::XYEPositionQueue xyePositionQueue;
+  Clef::Fw::XYEPositionQueue &xyePositionQueue;
 };
 
 class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
@@ -240,8 +239,8 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
     }
     pop();
   }
-  Axes::XYZEPosition getStartPosition() const;
-  Axes::XYZEPosition getEndPosition() const;
+  XYZEPosition getStartPosition() const;
+  XYZEPosition getEndPosition() const;
   bool hasCapacityFor(const Action::Type type) const {
     switch (type) {
       case Action::Type::MOVE_XY:
@@ -275,10 +274,9 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
   void pop();
 
  private:
-  Axes::XYZEPosition startPosition_; /*!< Remember start position of the current
+  XYZEPosition startPosition_; /*!< Remember start position of the current
                                         first action. */
-  Axes::XYZEPosition
-      endPosition_; /*!< Remember end position of the last action. */
+  XYZEPosition endPosition_;   /*!< Remember end position of the last action. */
 
   Clef::Util::PooledQueue<Action::MoveXY, 8> moveXyQueue_;
   Clef::Util::PooledQueue<Action::MoveXYE, 8> moveXyeQueue_;
