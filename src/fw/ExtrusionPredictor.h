@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <fw/kalman/Velocity.h>
+#include <fw/kalman/Degen.h>
 #include <util/Units.h>
 
 namespace Clef::Fw {
@@ -82,5 +82,24 @@ class LinearExtrusionPredictor : public ExtrusionPredictor {
   float t_ = 0.0f;
   float xs_ = 0.0f;
   float dxsdt_ = 0.0f;
+};
+
+/**
+ * Use a Kalman filter to represent the state of the extrusion system.
+ */
+class KalmanFilterExtrusionPredictor : public ExtrusionPredictor {
+ public:
+  void reset(const float t, const float xe0, const float xs0) override;
+
+  void evolve(const float t, const float xe, const float xs,
+              const float P) override;
+
+ private:
+  float getRelativeExtrusionPosition() const override;
+  float getExtrusionRate() const override;
+
+ private:
+  Kalman::DegenFilter filter_;
+  float t_ = 0.0f;
 };
 }  // namespace Clef::Fw

@@ -225,7 +225,7 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
         float xe = *this->stepper_.getPosition();
         float xs = *displacementSensor_.readPosition();
         float P = pressureSensor_.readPressure();
-        predictor_.evolve(t, xe, xs, P);
+        predictor_.evolve(t / 1e6, xe, xs, P);
         pressureSensor_.release(pressureSensorToken_);
       }
       displacementSensor_.release(displacementSensorToken_);

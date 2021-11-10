@@ -417,10 +417,9 @@ class KalmanFilterGenerator:
                     (self.uvars, "Control"),
                     (self.zvars, "Observation")])),
             "      /* Time Step */ const float deltat);",
-            """
- private:
-  void init() override;
+            """  void init() override;
 
+ private:
   void calculateStateTrans(
       const typename Base{0}::XVector &xk,
       const typename Base{0}::UVector &uk, const float deltat,

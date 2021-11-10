@@ -66,4 +66,25 @@ float LinearExtrusionPredictor::getRelativeExtrusionPosition() const {
 }
 
 float LinearExtrusionPredictor::getExtrusionRate() const { return dxsdt_; }
+
+void KalmanFilterExtrusionPredictor::reset(const float t, const float xe0,
+                                           const float xs0) {
+  ExtrusionPredictor::reset(t, xe0, xs0);
+  filter_.init();
+  t_ = t;
+}
+
+void KalmanFilterExtrusionPredictor::evolve(const float t, const float xe,
+                                            const float xs, const float P) {
+  filter_.evolve(xe - xe0_, xs - xs0_, P, t - t_);
+  t_ = t;
+}
+
+float KalmanFilterExtrusionPredictor::getRelativeExtrusionPosition() const {
+  return filter_.getState().get(0, 0);
+}
+
+float KalmanFilterExtrusionPredictor::getExtrusionRate() const {
+  return 60 * filter_.getState().get(1, 0);
+}
 }  // namespace Clef::Fw

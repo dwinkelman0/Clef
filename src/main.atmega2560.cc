@@ -19,7 +19,7 @@ Clef::Fw::PressureSensor pressureSensor(clock, 1);
 Clef::Fw::ActionQueue actionQueue;
 Clef::Fw::XYEPositionQueue xyePositionQueue;
 Clef::Fw::GcodeParser gcodeParser;
-Clef::Fw::LinearExtrusionPredictor extrusionPredictor(0.2);
+Clef::Fw::KalmanFilterExtrusionPredictor extrusionPredictor;
 Clef::Fw::Axes::XAxis xAxis(Clef::Impl::Atmega2560::xAxisStepper,
                             Clef::Impl::Atmega2560::xAxisTimer);
 Clef::Fw::Axes::YAxis yAxis(Clef::Impl::Atmega2560::yAxisStepper,
