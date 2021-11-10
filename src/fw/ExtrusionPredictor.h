@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <fw/kalman/Velocity.h>
 #include <util/Units.h>
 
 namespace Clef::Fw {
@@ -10,13 +11,26 @@ class ExtrusionPredictor {
   /**
    * Reset the predictor to its initial state.
    */
-  virtual void reset(const float xe0, const float xs0) = 0;
+  virtual void reset(const float t, const float xe0, const float xs0);
 
   /**
    * Set the target amount for the extrusion.
    */
-  virtual void setEndpoint(const float endpoint) = 0;
-  virtual float getEndpoint() const = 0;
+  void setEndpoint(const float endpoint);
+  float getEndpoint() const;
+
+  /**
+   * Check whether the target extrusion amount has been reached or exceeded.
+   */
+  bool isBeyondEndpoint() const;
+
+  /**
+   * Determine the feedrate for the XY direction.
+   */
+  float determineXYFeedrate(const float startX, const float startY,
+                            const float startE, const float endX,
+                            const float endY, const float endE, const float x,
+                            const float y) const;
 
   /**
    * Evolve the internal stage of the predictor.
@@ -25,34 +39,26 @@ class ExtrusionPredictor {
    * math-intensive and we want to avoid templating. Units are:
    *   - t: microseconds
    *   - xe, xs: E-axis usteps
-   *   - dxsdt: E-axis usteps per minute
    *   - P: pressure units
    */
   virtual void evolve(const float t, const float xe, const float xs,
-                      const float dxsdt, const float P) = 0;
+                      const float P) = 0;
+
+ protected:
+  /**
+   * Get the progress of the extrusion relative to the baseline xs0_.
+   */
+  virtual float getRelativeExtrusionPosition() const = 0;
 
   /**
-   * Check whether the target extrusion amount has been reached or exceeded.
+   * Get the feedrate of the extrusion in E-axis usteps per minute.
    */
-  virtual bool isBeyondEndpoint() const = 0;
+  virtual float getExtrusionRate() const = 0;
 
-  /**
-   * Determine the target position for the underlying physical actuator.
-   */
-  virtual float determineExtruderTargetPosition() const = 0;
-
-  /**
-   * Determine the feedrate for the underlying physical actuator.
-   */
-  virtual float determineExtruderFeedrate() const = 0;
-
-  /**
-   * Determine the feedrate for the XY direction.
-   */
-  virtual float determineXYFeedrate(const float startX, const float startY,
-                                    const float startE, const float endX,
-                                    const float endY, const float endE,
-                                    const float x, const float y) const = 0;
+ protected:
+  float endpoint_ = 0.0f; /*!< Extrusion endpoint relative to xe0_. */
+  float xe0_ = 0.0f; /*!< xe is normalized against the position at reset. */
+  float xs0_ = 0.0f; /*!< xs is normalized against the displacement at reset. */
 };
 
 /**
@@ -60,25 +66,21 @@ class ExtrusionPredictor {
  */
 class LinearExtrusionPredictor : public ExtrusionPredictor {
  public:
-  void reset(const float xe0, const float xs0) override;
-  void setEndpoint(const float endpoint) override;
-  float getEndpoint() const override;
-  void evolve(const float t, const float xe, const float xs, const float dxsdt,
+  LinearExtrusionPredictor(const float lowpassCoefficient);
+
+  void reset(const float t, const float xe0, const float xs0) override;
+
+  void evolve(const float t, const float xe, const float xs,
               const float P) override;
-  bool isBeyondEndpoint() const override;
-  float determineExtruderTargetPosition() const override;
-  float determineExtruderFeedrate() const override;
-  float determineXYFeedrate(const float startX, const float startY,
-                            const float startE, const float endX,
-                            const float endY, const float endE, const float x,
-                            const float y) const override;
 
  private:
-  float endpoint_ = 0.0f;
-  float xe_ = 0.0f;
-  float xe0_ = 0.0f; /*!< xe is normalized against the position at reset. */
+  float getRelativeExtrusionPosition() const override;
+  float getExtrusionRate() const override;
+
+ private:
+  float lowpassCoefficient_;
+  float t_ = 0.0f;
   float xs_ = 0.0f;
-  float xs0_ = 0.0f; /*!< xs is normalized against the displacement at reset. */
   float dxsdt_ = 0.0f;
 };
 }  // namespace Clef::Fw

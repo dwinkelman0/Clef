@@ -5,49 +5,24 @@
 #include <math.h>
 
 namespace Clef::Fw {
-void LinearExtrusionPredictor::reset(const float xe0, const float xs0) {
-  endpoint_ = 0.0f;
-  xe_ = 0.0f;
+void ExtrusionPredictor::reset(const float t, const float xe0,
+                               const float xs0) {
   xe0_ = xe0;
-  xs_ = 0.0f;
   xs0_ = xs0;
-  dxsdt_ = 0.0f;
+  endpoint_ = 0.0f;
 }
 
-void LinearExtrusionPredictor::setEndpoint(const float endpoint) {
+void ExtrusionPredictor::setEndpoint(const float endpoint) {
   endpoint_ = endpoint - xe0_;
 }
 
-float LinearExtrusionPredictor::getEndpoint() const { return endpoint_ + xe0_; }
+float ExtrusionPredictor::getEndpoint() const { return endpoint_; }
 
-void LinearExtrusionPredictor::evolve(const float t, const float xe,
-                                      const float xs, const float dxsdt,
-                                      const float P) {
-  xe_ = xe - xe0_;
-  xs_ = xs - xs0_;
-  dxsdt_ = dxsdt;
+bool ExtrusionPredictor::isBeyondEndpoint() const {
+  return getRelativeExtrusionPosition() >= getEndpoint();
 }
 
-bool LinearExtrusionPredictor::isBeyondEndpoint() const {
-  return xs_ >= endpoint_;
-}
-
-float LinearExtrusionPredictor::determineExtruderTargetPosition() const {
-  float difference = endpoint_ - xs_;
-  if (difference > 500) {
-    return endpoint_ + 1000;
-  } else if (difference > 50) {
-    return endpoint_ + 2 * difference;
-  } else {
-    return endpoint_;
-  }
-}
-
-float LinearExtrusionPredictor::determineExtruderFeedrate() const {
-  return 40.0f;
-}
-
-float LinearExtrusionPredictor::determineXYFeedrate(
+float ExtrusionPredictor::determineXYFeedrate(
     const float startX, const float startY, const float startE,
     const float endX, const float endY, const float endE, const float x,
     const float y) const {
@@ -56,10 +31,39 @@ float LinearExtrusionPredictor::determineXYFeedrate(
   float xyTotal = sqrt((endX - startX) * (endX - startX) +
                        (endY - startY) * (endY - startY));
   float xyRatio = xyProgress / xyTotal;
-  float eProgress = xs_ - (startE - xe0_);
+  float eProgress = getRelativeExtrusionPosition() - (startE - xe0_);
   float eTotal = fabs(endE - startE);
   float eRatio = eProgress / eTotal;
   float xyLag = xyTotal * (eRatio - xyRatio);
-  return dxsdt_ + xyLag * 30.0f; /*!< Eliminate half the lag per second. */
+  return getExtrusionRate() +
+         xyLag * 30.0f; /*!< Eliminate half the lag per second. */
 }
+
+LinearExtrusionPredictor::LinearExtrusionPredictor(
+    const float lowpassCoefficient)
+    : lowpassCoefficient_(lowpassCoefficient) {}
+
+void LinearExtrusionPredictor::reset(const float t, const float xe0,
+                                     const float xs0) {
+  ExtrusionPredictor::reset(t, xe0, xs0);
+  t_ = t;
+  xs_ = 0.0f;
+  dxsdt_ = 0.0f;
+}
+
+void LinearExtrusionPredictor::evolve(const float t, const float xe,
+                                      const float xs, const float P) {
+  float xsNext = xs - xs0_;
+  float dxsdtUpdate = dxsdt_ = (xsNext - xs_) / (t - t_) * 60;
+  dxsdt_ =
+      (1 - lowpassCoefficient_) * dxsdt_ + lowpassCoefficient_ * dxsdtUpdate;
+  t_ = t;
+  xs_ = xsNext;
+}
+
+float LinearExtrusionPredictor::getRelativeExtrusionPosition() const {
+  return xs_;
+}
+
+float LinearExtrusionPredictor::getExtrusionRate() const { return dxsdt_; }
 }  // namespace Clef::Fw

@@ -18,6 +18,7 @@ class IntegrationFixture : public testing::Test {
   Clef::Impl::Emulator::Clock clock_;
   Clef::Impl::Emulator::Serial serial_;
   ActionQueue actionQueue_;
+  XYEPositionQueue xyePositionQueue_;
   GcodeParser parser_;
   Clef::Impl::Emulator::GenericTimer xAxisTimer_;
   Clef::Impl::Emulator::GenericTimer yAxisTimer_;

@@ -224,9 +224,8 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
         float t = *pressureSensor_.getMeasurementTime();
         float xe = *this->stepper_.getPosition();
         float xs = *displacementSensor_.readPosition();
-        float dxsdt = *displacementSensor_.readFeedrate();
         float P = pressureSensor_.readPressure();
-        predictor_.evolve(t, xe, xs, dxsdt, P);
+        predictor_.evolve(t, xe, xs, P);
 
         // this->setTargetPosition(predictor_.determineExtruderTargetPosition());
         // this->setFeedrate(predictor_.determineExtruderFeedrate());
@@ -247,10 +246,13 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
     return hasNewData;
   }
 
-  void beginExtrusion() {
+  void beginExtrusion(
+      const Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time) {
     typename Axis<USTEPS_PER_MM>::StepperPosition stepperPosition =
         *this->stepper_.getPosition();
-    predictor_.reset(*stepperPosition,
+    Clef::Util::Time<float, Clef::Util::TimeUnit::USEC> timeFloat(*time);
+    Clef::Util::Time<float, Clef::Util::TimeUnit::SEC> timeSeconds(timeFloat);
+    predictor_.reset(*timeSeconds, *stepperPosition,
                      *stepperPosition + *displacementSensorOffset_);
   }
 

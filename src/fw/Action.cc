@@ -101,7 +101,7 @@ void MoveXYE::onStart(Context &context) {
 
   context.axes.setFeedrate(1.0f);
   context.axes.setXyParams(startPosition, segmentEndPosition);
-  context.axes.getE().beginExtrusion();
+  context.axes.getE().beginExtrusion(context.clock.getMicros());
   context.axes.getE().setFeedrate(20.0f);
   context.axes.getE().setExtrusionEndpoint(getEndPosition().e);
 }
@@ -143,7 +143,8 @@ void MoveXYE::onLoop(Context &context) {
 }
 
 bool MoveXYE::isFinished(const Context &context) const {
-  return numPointsCompleted_ == numPointsPushed_;
+  return numPointsCompleted_ == numPointsPushed_ &&
+         context.axes.getE().isExtrusionDone();
 }
 
 void MoveXYE::onPush(Context &context) {
