@@ -26,7 +26,7 @@ MoveXY::MoveXY(const XYZEPosition &startPosition,
 void MoveXY::onStart(Context &context) {
   context.axes.setXyParams(
       context.actionQueue.getStartPosition().asXyePosition(),
-      getEndPosition().asXyePosition());
+      getEndPosition().asXyePosition(), context.axes.getFeedrate());
 }
 
 bool MoveXY::isFinished(const Context &context) const {
@@ -99,8 +99,7 @@ void MoveXYE::onStart(Context &context) {
   XYEPosition segmentEndPosition = *context.xyePositionQueue.first();
   XYEPosition startPosition = segmentStart_;
 
-  context.axes.setFeedrate(1.0f);
-  context.axes.setXyParams(startPosition, segmentEndPosition);
+  context.axes.setXyParams(startPosition, segmentEndPosition, 1.0f);
   context.axes.getE().beginExtrusion(context.clock.getMicros());
   context.axes.getE().setFeedrate(20.0f);
   context.axes.getE().setExtrusionEndpoint(getEndPosition().e);
@@ -119,7 +118,12 @@ void MoveXYE::onLoop(Context &context) {
       numPointsCompleted_++;
       if (numPointsCompleted_ < numPointsPushed_) {
         XYEPosition endPosition = *context.xyePositionQueue.first();
-        context.axes.setXyParams(segmentStart_, endPosition);
+        float newFeedrate;
+        context.axes.getE().throttle(
+            segmentStart_, endPosition,
+            context.axes.getCurrentPosition().asXyePosition(), &newFeedrate);
+        typename Axes::XAxis::UstepFeedrate ustepFeedrate(newFeedrate);
+        context.axes.setXyParams(segmentStart_, endPosition, ustepFeedrate);
       }
     }
   }
@@ -130,8 +134,7 @@ void MoveXYE::onLoop(Context &context) {
             segmentStart_, *context.xyePositionQueue.first(),
             context.axes.getCurrentPosition().asXyePosition(), &newFeedrate)) {
       typename Axes::XAxis::UstepFeedrate ustepFeedrate(newFeedrate);
-      context.axes.setFeedrate(ustepFeedrate);
-      context.axes.setXyParams(segmentStart_, endPosition);
+      context.axes.setXyParams(segmentStart_, endPosition, ustepFeedrate);
 
       char buffer[64];
       sprintf(buffer, ";xy feedrate = %d",

@@ -226,23 +226,19 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
         float xs = *displacementSensor_.readPosition();
         float P = pressureSensor_.readPressure();
         predictor_.evolve(t, xe, xs, P);
-
-        // this->setTargetPosition(predictor_.determineExtruderTargetPosition());
-        // this->setFeedrate(predictor_.determineExtruderFeedrate());
-        *xyFeedrate = predictor_.determineXYFeedrate(
-            *XYEPosition::XAxis::gcodePositionToStepper(startPosition.x),
-            *XYEPosition::YAxis::gcodePositionToStepper(startPosition.y),
-            *XYEPosition::EAxis::gcodePositionToStepper(startPosition.e),
-            *XYEPosition::XAxis::gcodePositionToStepper(endPosition.x),
-            *XYEPosition::YAxis::gcodePositionToStepper(endPosition.y),
-            *XYEPosition::EAxis::gcodePositionToStepper(endPosition.e),
-            *XYEPosition::XAxis::gcodePositionToStepper(currentPosition.x),
-            *XYEPosition::YAxis::gcodePositionToStepper(currentPosition.y));
-
         pressureSensor_.release(pressureSensorToken_);
       }
       displacementSensor_.release(displacementSensorToken_);
     }
+    *xyFeedrate = predictor_.determineXYFeedrate(
+        *XYEPosition::XAxis::gcodePositionToStepper(startPosition.x),
+        *XYEPosition::YAxis::gcodePositionToStepper(startPosition.y),
+        *XYEPosition::EAxis::gcodePositionToStepper(startPosition.e),
+        *XYEPosition::XAxis::gcodePositionToStepper(endPosition.x),
+        *XYEPosition::YAxis::gcodePositionToStepper(endPosition.y),
+        *XYEPosition::EAxis::gcodePositionToStepper(endPosition.e),
+        *XYEPosition::XAxis::gcodePositionToStepper(currentPosition.x),
+        *XYEPosition::YAxis::gcodePositionToStepper(currentPosition.y));
     return hasNewData;
   }
 
@@ -326,11 +322,12 @@ class Axes : public Clef::Util::Initialized {
    * Set the XY position and feedrate.
    */
   void setXyParams(const XYEPosition &startPosition,
-                   const XYEPosition &endPosition) {
+                   const XYEPosition &endPosition,
+                   const XAxis::GcodeFeedrate feedrate) {
     const XYEPosition difference = endPosition - startPosition;
     const float magnitude = difference.getXyMagnitude();
-    getX().setFeedrate(getFeedrate() * fabs(*difference.x / magnitude));
-    getY().setFeedrate(getFeedrate() * fabs(*difference.y / magnitude));
+    getX().setFeedrate(feedrate * fabs(*difference.x / magnitude));
+    getY().setFeedrate(feedrate * fabs(*difference.y / magnitude));
     getX().setTargetPosition(endPosition.x);
     getY().setTargetPosition(endPosition.y);
   }
