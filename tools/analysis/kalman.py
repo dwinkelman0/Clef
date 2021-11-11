@@ -3,6 +3,7 @@
 # Copyright 2021 by Daniel Winkelman. All rights reserved.
 
 import argparse
+from ast import parse
 import datetime
 import json
 import re
@@ -28,10 +29,12 @@ def addFilterArgs(parser):
     parser.add_argument("--batch", action="store_true", default=False)
     parser.add_argument("--data-dir", type=str, default=utils.DEFAULT_DATA_DIR)
     parser.add_argument("--data-dir-root", type=str, default=".")
+    parser.add_argument("--output-dir-root", type=str, default=None)
     parser.add_argument(
         "--data-dir-recurse", action="store_true", default=False)
     parser.add_argument("--no-plots", action="store_true", default=False)
     parser.add_argument("--deltat-catchup", type=float, default=1)
+    parser.add_argument("--metrics", type=str, nargs="+")
 
 
 parser = argparse.ArgumentParser()
@@ -58,6 +61,7 @@ generate_parser.add_argument(
 generate_parser.add_argument("--output-dir", type=str, default=None)
 
 logFileName = "log-{}".format(datetime.datetime.now().isoformat())
+commandLineInput = ""
 
 
 class Expression:
@@ -882,20 +886,23 @@ def manipulateKalmanSpec(spec, varGroup, index, param, change):
     return origValue
 
 
-def assembleOutputDirName(dataDir, filterType, modelName, subdirs):
+def assembleOutputDirName(dataDir, filterType, modelName, subdirs, outputDirRoot=None):
     dataDirPath = os.path.split(dataDir)
-    return os.path.join(
-        *dataDirPath[:-1],
+    suffix = os.path.join(
         "kalman-{}-{}-{}".format(filterType, dataDirPath[-1], modelName),
         *subdirs)
+    if outputDirRoot is None:
+        return os.path.join(*dataDirPath[:-1], suffix)
+    else:
+        return os.path.join(outputDirRoot, suffix)
 
 
 def kalmanAnalysis(
-        dataDir, spec, filterType, outputSubdirs=[],
-        generatePlots=False, completeSummary=False, deltatCatchup=None):
+        dataDir, spec, filterType, outputSubdirs=[], outputDirRoot=None,
+        generatePlots=False, deltatCatchup=1, metrics={}):
     # Figure out the output directory
     outputDir = assembleOutputDirName(
-        dataDir, filterType, spec.modelName, outputSubdirs)
+        dataDir, filterType, spec.modelName, outputSubdirs, outputDirRoot=outputDirRoot)
 
     # Plotting utils
     def plotSeries(series, outputFileName=None, show=False, **kwargs):
@@ -993,20 +1000,22 @@ def kalmanAnalysis(
         plotSeries([series])
 
     # Simulate the extrapolation algorithm
-    if deltatCatchup is not None:
-        xsExtArray = calculateExtrapolation(
-            inputData["xs"], kalmanOutputSeries[spec.dxsdt], inputData["deltat"], deltatCatchup)
-        xsExt = utils.Series("t", "xs_extrapolation", xsExtArray)
-        xsExtError = xsExt.error(inputData["xs"])
-        dxsdtLowpass = inputData["xs"].derivative().expLowpass(0.2)
-        xsExtLowpassArray = calculateExtrapolation(
-            inputData["xs"], dxsdtLowpass, inputData["deltat"], deltatCatchup)
-        xsExtLowpass = utils.Series("t", "xs_lowpass", xsExtLowpassArray)
-        xsExtLowpassError = xsExtLowpass.error(inputData["xs"])
-        plotSeries([inputData["xs"], xsExt, xsExtLowpass])
-        plotSeries([xsExtError])
-        plotSeries([xsExtLowpassError])
-        plotSeries([inputData["dxsdt"], dxsdtLowpass])
+    xsExtArray = calculateExtrapolation(
+        inputData["xs"], kalmanOutputSeries[spec.dxsdt], inputData["deltat"], deltatCatchup)
+    xsExt = utils.Series("t", "xs_extrapolation", xsExtArray)
+    xsExtError = xsExt.error(inputData["xs"])
+    dxsdtInputLowpass = inputData["xs"].derivative().expLowpass(0.2)
+    d2xsdt2InputLowpass = dxsdtInputLowpass.derivative().expLowpass(
+        0.05, newDep="d2xsdt2")
+    xsExtLowpassArray = calculateExtrapolation(
+        inputData["xs"], dxsdtInputLowpass, inputData["deltat"], deltatCatchup)
+    xsExtLowpass = utils.Series("t", "xs_lowpass", xsExtLowpassArray)
+    xsExtLowpassError = xsExtLowpass.error(inputData["xs"])
+    plotSeries([inputData["xs"], xsExt, xsExtLowpass])
+    plotSeries([xsExtError])
+    plotSeries([xsExtLowpassError])
+    plotSeries([d2xsdt2InputLowpass])
+    plotSeries([inputData["dxsdt"], dxsdtInputLowpass])
 
     # Special plots
     if hasattr(spec, "Ps") and spec.Ps in kalmanOutputSeries:
@@ -1014,42 +1023,75 @@ def kalmanAnalysis(
             kalmanOutputSeries[spec.Ps])
         plotSeries([viscocityCurve])
 
+    # Calculate metrics
+    totalCost = 0
+    metricsOutput = {}
+    if "epe" in metrics:
+        # Extrapolated Position Error (EPE)
+        cost = xsExtError.rms()
+        metricsOutput["epe"] = {
+            "value": cost,
+            "weight": metrics["epe"],
+        }
+        totalCost += cost * metrics["epe"]
+    if "aw-epe" in metrics:
+        # Acceleration-Weighted EPE (AW-EPE)
+        weightedXsExtError = xsExt.applyBinary(
+            d2xsdt2InputLowpass, lambda x1, x2: x1 * x2)
+        cost = weightedXsExtError.rms()
+        metricsOutput["aw-epe"] = {
+            "value": cost,
+            "weight": metrics["aw-epe"],
+        }
+        totalCost += cost * metrics["aw-epe"]
+    if "min-accel" in metrics:
+        # Minimal Acceleration (smooth feedrate)
+        d2xsdt2 = kalmanOutputSeries[spec.dxsdt].derivative(
+            newDep="kalman_d2xsdt2")
+        plotSeries([d2xsdt2])
+        cost = d2xsdt2.rms()
+        metricsOutput["min-accel"] = {
+            "value": cost,
+            "weight": metrics["min-accel"],
+        }
+        totalCost += cost * metrics["min-accel"]
+    if "vw-min-accel" in metrics:
+        # Velocity-Weighted Minimal Acceleration
+        d2xsdt2 = kalmanOutputSeries[spec.dxsdt].derivative(
+            newDep="kalman_weighted_d2xsdt2")
+        weightedD2xsdt2 = d2xsdt2.applyBinary(
+            kalmanOutputSeries[spec.dxsdt], lambda x1, x2: x1 * x2)
+        plotSeries([weightedD2xsdt2])
+        cost = weightedD2xsdt2.rms()
+        metricsOutput["vw-min-accel"] = {
+            "value": cost,
+            "weight": metrics["vw-min-accel"],
+        }
+        totalCost += cost * metrics["vw-min-accel"]
+
     # Calculate costs
     errorCosts = calculateErrorCosts(
         spec.generator, kalmanInputSeries, kalmanOutputSeries, plotSeries)
     smoothnessCosts = calculateSmoothnessCosts(
         spec.generator, kalmanOutputSeries)
-    totalCost = sum(errorCosts.values()) + sum(smoothnessCosts.values())
-    if completeSummary:
-        print("Total Cost: {}".format(totalCost))
-        summaries = [("error", var.symbol, cost) for var, cost in errorCosts.items()] + \
-            [("smoothness", var.symbol, cost)
-             for var, cost in smoothnessCosts.items()]
-        summaries.sort(key=lambda row: row[2], reverse=True)
-        for category, symbol, cost in summaries:
-            print(" * {}: {:.3f}% ({:.3e})".format(
-                "{}-{}:".format(category, symbol).ljust(24, "."),
-                100 * cost / totalCost, cost))
     plt.close("all")
 
     # Save outputs
     jsonOutput = {
+        "command": commandLineInput,
         "vars": spec.generator.generateJsonSpec(),
         "metrics": {
-            "error": {str(k): v for k, v in errorCosts.items()},
-            "smoothness": {str(k): v for k, v in smoothnessCosts.items()},
+            **metricsOutput,
+            **{
+                "error": {str(k): v for k, v in errorCosts.items()},
+                "smoothness": {str(k): v for k, v in smoothnessCosts.items()},
+            },
         },
         "cost": totalCost,
     }
     with open("{}/summary.json".format(outputDir), "w") as outputFile:
         json.dump(jsonOutput, outputFile, indent=4, sort_keys=True)
-
-    if deltatCatchup is not None:
-        xsExtErrorTotal = xsExtError.rms()
-        print("True extrusion RMS error: {}".format(xsExtErrorTotal))
-        return xsExtErrorTotal, inputData["xe"].numRows()
-    else:
-        return totalCost, inputData["xe"].numRows()
+    return totalCost, inputData["xe"].numRows()
 
 
 def getDataDirs(args):
@@ -1072,8 +1114,8 @@ def getDataDirs(args):
 
 
 def analyzeBatch(
-        dataDirs, spec, filterType, outputSubdirs=[],
-        generatePlots=False, completeSummary=False, deltatCatchup=None, disableLogging=False):
+        dataDirs, spec, filterType, outputSubdirs=[], outputDirRoot=None,
+        generatePlots=False, deltatCatchup=1, metrics={}, disableLogging=False):
     # Collect costs and weights for each dataset
     costs = {}
     print("Preparing to process:")
@@ -1098,8 +1140,8 @@ def analyzeBatch(
     def process():
         for dataDir in dataDirs:
             cost, weight = kalmanAnalysis(
-                dataDir, spec, filterType, outputSubdirs=outputSubdirs,
-                generatePlots=generatePlots, completeSummary=completeSummary, deltatCatchup=deltatCatchup)
+                dataDir, spec, filterType, outputSubdirs=outputSubdirs, outputDirRoot=outputDirRoot,
+                generatePlots=generatePlots, deltatCatchup=deltatCatchup, metrics=metrics)
             printOverride("{} (weight {}): cost is {}".format(
                 dataDir, weight, cost))
             costs[dataDir] = (cost, weight)
@@ -1127,20 +1169,32 @@ def analyzeBatch(
     return output
 
 
+def parseMetrics(metrics):
+    output = {}
+    for metric in metrics:
+        parts = metric.split("=")
+        assert(len(parts) == 2)
+        output[parts[0]] = float(parts[1])
+    return output
+
+
 if __name__ == "__main__":
     # Parse command line args and set up directories
     args = parser.parse_args((sys.argv[1:]))
+    commandLineInput = " ".join(sys.argv)
     if any((args.command == s for s in ("run", "optimize", "generate"))):
         spec = openKalmanSpec(args.model)
         if not args.override_params is None:
             with open(args.override_params, "r") as jsonFile:
                 spec.generator.overrideParams(json.load(jsonFile))
     if args.command == "run":
+        metrics = parseMetrics(args.metrics)
         dataDirs = getDataDirs(args)
         cost = analyzeBatch(
-            dataDirs, spec, args.filter_type, outputSubdirs=["run"],
-            generatePlots=not args.no_plots, completeSummary=True, deltatCatchup=args.deltat_catchup, disableLogging=args.disable_logging)
+            dataDirs, spec, args.filter_type, outputSubdirs=["run"], outputDirRoot=args.output_dir_root,
+            generatePlots=not args.no_plots, deltatCatchup=args.deltat_catchup, metrics=metrics, disableLogging=args.disable_logging)
     elif args.command == "optimize":
+        metrics = parseMetrics(args.metrics)
         dataDirs = getDataDirs(args)
         for n in range(100):
             costs = []
@@ -1148,8 +1202,8 @@ if __name__ == "__main__":
             print("Running reference ({})...".format(n))
             referenceCost = analyzeBatch(
                 dataDirs, spec, args.filter_type,
-                outputSubdirs=["opt{}".format(n), "reference"],
-                generatePlots=not args.no_plots, deltatCatchup=args.deltat_catchup, disableLogging=args.disable_logging)
+                outputSubdirs=["opt{}".format(n), "reference"], outputDirRoot=args.output_dir_root,
+                generatePlots=not args.no_plots, deltatCatchup=args.deltat_catchup, metrics=metrics, disableLogging=args.disable_logging)
             for group in ["xvars", "zvars"]:
                 for index, var in enumerate(getattr(spec, group)):
                     for param in ["initialValue", "initialCovariance", "noise", "updateWeight"]:
@@ -1166,7 +1220,8 @@ if __name__ == "__main__":
                                 dataDirs, spec, args.filter_type,
                                 outputSubdirs=[
                                     "opt{}".format(n), "trial", label],
-                                deltatCatchup=args.deltat_catchup, disableLogging=args.disable_logging)
+                                outputDirRoot=args.output_dir_root,
+                                deltatCatchup=args.deltat_catchup, metrics=metrics, disableLogging=args.disable_logging)
                             costs.append((address, cost, change, origValue))
                             restoreKalmanSpec(spec, *address, origValue)
             costs = list(
@@ -1178,7 +1233,8 @@ if __name__ == "__main__":
                 newCost = analyzeBatch(
                     dataDirs, spec, args.filter_type,
                     ["opt{}".format(n), "optimize", str(index)],
-                    deltatCatchup=args.deltat_catchup, disableLogging=args.disable_logging)
+                    outputDirRoot=args.output_dir_root,
+                    deltatCatchup=args.deltat_catchup, metrics=metrics, disableLogging=args.disable_logging)
                 if newCost is None or newCost >= bestCost or np.isnan(newCost):
                     restoreKalmanSpec(spec, *address, origValue)
                     break
