@@ -18,6 +18,8 @@ void GenericTimer::setFrequency(const Clef::Util::Frequency<float> frequency) {
 
 Clef::Util::Frequency<float> GenericTimer::getMinFrequency() const { return 0; }
 
+void GenericTimer::setDutyCycle(const float dutyCycle) {}
+
 void GenericTimer::setRisingEdgeCallback(const TransitionCallback callback,
                                          void *data) {
   risingEdgeCallback_ = callback;

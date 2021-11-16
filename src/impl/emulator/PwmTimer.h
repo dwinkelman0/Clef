@@ -19,6 +19,7 @@ class GenericTimer : public Clef::If::PwmTimer {
   bool isEnabled() const override;
   void setFrequency(const Clef::Util::Frequency<float> frequency) override;
   Clef::Util::Frequency<float> getMinFrequency() const override;
+  void setDutyCycle(const float dutyCycle) override;
   void setRisingEdgeCallback(const TransitionCallback callback,
                              void *data) override;
   void setFallingEdgeCallback(const TransitionCallback callback,

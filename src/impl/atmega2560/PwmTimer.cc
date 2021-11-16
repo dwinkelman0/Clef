@@ -4,8 +4,12 @@
 
 #include <avr/interrupt.h>
 #include <if/Interrupts.h>
+#include <math.h>
 
 namespace Clef::Impl::Atmega2560 {
+template <typename DType>
+GenericTimer<DType>::GenericTimer() : dutyCycle_(0.5f) {}
+
 template <typename DType>
 bool GenericTimer<DType>::init() {
   if (Clef::Util::Initialized::init()) {
@@ -60,7 +64,7 @@ void GenericTimer<DType>::setFrequency(
   {
     Clef::If::DisableInterrupts noInterrupts;
     this->setCompareA(compare);
-    this->setCompareB(compare / 2);
+    this->setCompareB(static_cast<DType>(compare * dutyCycle_));
     this->setPrescaler(prescaling);
     if (this->getCount() >= compare) {
       this->setCount(0);
@@ -71,6 +75,12 @@ void GenericTimer<DType>::setFrequency(
 template <typename DType>
 Clef::Util::Frequency<float> GenericTimer<DType>::getMinFrequency() const {
   return static_cast<const HardwareTimer<DType> *>(this)->_getMinFrequency();
+}
+
+template <typename DType>
+void GenericTimer<DType>::setDutyCycle(const float dutyCycle) {
+  dutyCycle_ = 1 - dutyCycle;
+  this->setCompareB(static_cast<DType>(dutyCycle_ * this->getCompareA()));
 }
 
 template <typename DType>
@@ -87,6 +97,37 @@ void GenericTimer<DType>::setFallingEdgeCallback(
   Clef::If::DisableInterrupts noInterrupts();
   fallingEdgeCallback_ = callback;
   fallingEdgeCallbackData_ = data;
+}
+
+template <typename DType>
+bool GenericDirectOutputTimer<DType>::init() {
+  if (Clef::Util::Initialized::init()) {
+    Clef::If::DisableInterrupts noInterrupts();
+    this->initRegs();
+    this->setPrescaler(HardwareTimer<DType>::Prescaling::_64);
+    return true;
+  }
+  return false;
+}
+
+template <typename DType>
+void GenericDirectOutputTimer<DType>::enable() {
+  this->setEnabled(true);
+}
+
+template <typename DType>
+void GenericDirectOutputTimer<DType>::disable() {
+  this->setEnabled(false);
+}
+
+template <>
+void GenericDirectOutputTimer<uint8_t>::setDutyCycleA(const float dutyCycle) {
+  this->setCompareA(static_cast<uint8_t>(dutyCycle * 0xff));
+}
+
+template <>
+void GenericDirectOutputTimer<uint8_t>::setDutyCycleB(const float dutyCycle) {
+  this->setCompareB(static_cast<uint8_t>(dutyCycle * 0xff));
 }
 
 /**
@@ -112,7 +153,6 @@ YAxisTimer yAxisTimer;
 ZEAxisTimer zeAxisTimer;
 
 TIMER_ISRS(timer1, 0);
-TIMER_ISRS(timer2, 2);
 TIMER_ISRS(clockTimer, 1);
 TIMER_ISRS(xAxisTimer, 3);
 TIMER_ISRS(yAxisTimer, 4);

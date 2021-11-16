@@ -36,9 +36,15 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
     set (eep_file ${Target_fw_atmega2560}.eep)
     set (hex_file ${Target_fw_atmega2560}.hex)
 
+    if (DEFINED CLEF_PROGRAM)
+        set (FW_MAIN tests/atmega2560/${CLEF_PROGRAM}.cc)
+    else ()
+        set (FW_MAIN src/main.atmega2560.cc)
+    endif ()
+
     file (
         GLOB FW_ATMEGA2560_SOURCES
-        src/main.atmega2560.cc
+        ${FW_MAIN}
         src/impl/atmega2560/*.cc
         src/impl/atmega2560/usart/*.c
     )

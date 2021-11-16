@@ -138,11 +138,12 @@ int main() {
   Clef::Impl::Atmega2560::spi.setReadCompleteCallback(
       Clef::Fw::PressureSensor::injectWrapper, &pressureSensor);
   uint8_t pressureSensorToken = pressureSensor.subscribe();
-
-  Clef::Impl::Atmega2560::timer1.init();
-  Clef::Impl::Atmega2560::timer1.setFrequency(100.0f);
   Clef::Impl::Atmega2560::timer1.setFallingEdgeCallback(startSpiRead, nullptr);
-  Clef::Impl::Atmega2560::timer1.enable();
+
+  Clef::Impl::Atmega2560::timer2.init();
+  Clef::Impl::Atmega2560::timer2.setDutyCycleA(0.1f);
+  Clef::Impl::Atmega2560::timer2.setDutyCycleB(0.9f);
+  Clef::Impl::Atmega2560::timer2.enable();
 
   Clef::Fw::ActionQueue::Iterator it = actionQueue.first();
   int currentQueueSize = actionQueue.size();
