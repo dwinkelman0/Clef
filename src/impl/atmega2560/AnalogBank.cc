@@ -15,15 +15,17 @@ AnalogBank::AnalogBank()
 }
 
 bool AnalogBank::init() {
-  Pin6::init();
-  ADMUX = 0; /*!< Internal voltage reference, right-adjusted output bits. */
-  ADCSRB &= ~(1 << MUX5); /*!< Reset multiplexer. */
-  ADCSRA = (1 << ADEN) | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) |
-           (1 << ADPS0); /*!< Enable ADC, enable conversion interrupt, disable
-                            auto-triggering, maximum prescaling. */
-  DIDR0 = 0;             /*!< Allow digital inputs to be enabled. */
-  DIDR2 = 0;
-  return true;
+  if (Clef::Util::Initialized::init()) {
+    ADMUX = 0; /*!< Internal voltage reference, right-adjusted output bits. */
+    ADCSRB &= ~(1 << MUX5); /*!< Reset multiplexer. */
+    ADCSRA = (1 << ADEN) | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) |
+             (1 << ADPS0); /*!< Enable ADC, enable conversion interrupt, disable
+                              auto-triggering, maximum prescaling. */
+    DIDR0 = 0;             /*!< Allow digital inputs to be enabled. */
+    DIDR2 = 0;
+    return true;
+  }
+  return false;
 }
 
 void AnalogBank::addInput(const uint8_t number, ConversionCallback callback,
@@ -73,7 +75,6 @@ void AnalogBank::onPwmTimerEdge(void *arg) {
 }
 
 void AnalogBank::initiateConversion(uint8_t number) {
-  Pin6::write(!Pin6::getCurrentState());
   ADMUX &= ~0x07;
   ADMUX |= number & 0x07;
   ADCSRB &= ~(1 << MUX5);
@@ -81,10 +82,7 @@ void AnalogBank::initiateConversion(uint8_t number) {
   ADCSRA |= 1 << ADSC; /*!< Start conversion. */
 }
 
-ISR(ADC_vect) {
-  Pin6::write(!Pin6::getCurrentState());
-  analogBank.handleConversion();
-}
+ISR(ADC_vect) { analogBank.handleConversion(); }
 
 AnalogBank analogBank;
 }  // namespace Clef::Impl::Atmega2560

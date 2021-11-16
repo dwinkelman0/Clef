@@ -16,7 +16,7 @@ class Caliper : public Clef::If::SensorInput<typename Config::Position> {
  public:
   /**
    * This device will use the rising edge callback of the PwmTimer and set the
-   * frequency to 250 Hz.
+   * frequency to 100 Hz.
    */
   Caliper(Clef::If::PwmTimer &pwmTimer) : pwmTimer_(pwmTimer) {}
 
@@ -26,7 +26,7 @@ class Caliper : public Clef::If::SensorInput<typename Config::Position> {
     Config::ClockRegister::setCallback(onCaliperClockEdge, this);
     Config::DataRegister::init();
     pwmTimer_.init();
-    pwmTimer_.setFrequency(250.0f);
+    pwmTimer_.setFrequency(100.0f);
     pwmTimer_.setRisingEdgeCallback(onPwmTimerEdge, this);
     pwmTimer_.enable();
     return true;
@@ -78,7 +78,7 @@ class ExtruderCaliperConfig {
 };
 class ExtruderCaliper : public Caliper<ExtruderCaliperConfig> {
  public:
-  ExtruderCaliper() : Caliper(Clef::Impl::Atmega2560::timer2) {}
+  ExtruderCaliper() : Caliper(Clef::Impl::Atmega2560::timer1) {}
 };
 extern ExtruderCaliper extruderCaliper;
 }  // namespace Clef::Impl::Atmega2560

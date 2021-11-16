@@ -297,4 +297,21 @@ class PressureSensor : public Sensor<uint16_t> {
   float currentPressure_;
   float lowPassFilterCoefficient_;
 };
+
+/**
+ * Temperature is in degrees Celsius. It assumes that the temperature
+ * measurement is made by measuring the voltage of a thermistor with resistance
+ * Rt (and nominal resistance Rt0) in series with a resistor of known, constant
+ * resistance R0 as a ratio of the voltage source.
+ */
+class TemperatureSensor : public Sensor<float> {
+ public:
+  TemperatureSensor(Clef::If::Clock &clock, const float Rt0, const float R0);
+
+  static void injectWrapper(const float ratio, void *arg);
+
+ private:
+  static float convertNormalizedResistanceToTemperature(const float R);
+  float Rratio_;
+};
 }  // namespace Clef::Fw

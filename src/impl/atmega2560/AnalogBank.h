@@ -28,7 +28,5 @@ class AnalogBank : public Clef::Util::Initialized {
   void *conversionCallbackData_[16];
 };
 
-class Pin6 W_REGISTER_BOOL(H, 3, false);
-
 extern AnalogBank analogBank;
 }  // namespace Clef::Impl::Atmega2560

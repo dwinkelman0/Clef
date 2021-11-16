@@ -1,9 +1,8 @@
 // Copyright 2021 by Daniel Winkelman. All rights reserved.
 
 /**
- * This test case makes sure PWM timers of both varieties work. For this test,
- * expect that Arduino Mega pins 9 and 10 produce waveforms and all other pins
- * do not.
+ * This test case makes sure analog inputs work. This test adjusts PWM outputs
+ * depending on the voltage seen on analog inputs.
  */
 
 #include <if/Interrupts.h>
