@@ -42,6 +42,14 @@ static void onFallingEdge1(void *arg) {
   }
 }
 
+static void onCallbackA(void *arg) {
+  static int counter = 0;
+  if (counter++ % 1024 == 1023) {
+    printMessage("CallbackA");
+    counter = 0;
+  }
+}
+
 int main() {
   Clef::Impl::Atmega2560::serial.init();
   if (clock.init()) {
@@ -68,6 +76,7 @@ int main() {
   Clef::Impl::Atmega2560::timer2.init();
   Clef::Impl::Atmega2560::timer2.setDutyCycleA(0.8f);
   Clef::Impl::Atmega2560::timer2.setDutyCycleB(0.4f);
+  Clef::Impl::Atmega2560::timer2.setCallbackTop(onCallbackA, nullptr);
   Clef::Impl::Atmega2560::timer2.enable();
 
   while (1) {

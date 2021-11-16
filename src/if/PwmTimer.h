@@ -41,7 +41,13 @@ class PwmTimer : public PwmTimerCommon {
 
 class DirectOutputPwmTimer : public PwmTimerCommon {
  public:
+  using TransitionCallback = void (*)(void *);
+
   virtual void setDutyCycleA(const float dutyCycle) = 0;
   virtual void setDutyCycleB(const float dutyCycle) = 0;
+  virtual void setCallbackA(const TransitionCallback callback, void *data) = 0;
+  virtual void setCallbackB(const TransitionCallback callback, void *data) = 0;
+  virtual void setCallbackTop(const TransitionCallback callback,
+                              void *data) = 0;
 };
 }  // namespace Clef::If

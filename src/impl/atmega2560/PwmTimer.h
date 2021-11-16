@@ -73,6 +73,16 @@ class GenericDirectOutputTimer : public Clef::If::DirectOutputPwmTimer,
   void disable() override;
   void setDutyCycleA(const float dutyCycle) override;
   void setDutyCycleB(const float dutyCycle) override;
+  void setCallbackA(const TransitionCallback callback, void *data) override;
+  void setCallbackB(const TransitionCallback callback, void *data) override;
+  void setCallbackTop(const TransitionCallback callback, void *data) override;
+
+  TransitionCallback callbackA_ = nullptr;
+  void *callbackAData_ = nullptr;
+  TransitionCallback callbackB_ = nullptr;
+  void *callbackBData_ = nullptr;
+  TransitionCallback callbackTop_ = nullptr;
+  void *callbackTopData_ = nullptr;
 };
 
 /**
@@ -167,9 +177,15 @@ template class GenericTimer<uint16_t>;
       if (enabled) {                                                        \
         REG3(TCCR, N, A) |= (1 << REG3(COM, N, A1));                        \
         REG3(TCCR, N, A) |= (1 << REG3(COM, N, B1));                        \
+        REG2(TIMSK, N) |= (1 << REG3(OCIE, N, A));                          \
+        REG2(TIMSK, N) |= (1 << REG3(OCIE, N, B));                          \
+        REG2(TIMSK, N) |= (1 << REG2(TOIE, N));                             \
       } else {                                                              \
         REG3(TCCR, N, A) &= ~(1 << REG3(COM, N, A1));                       \
         REG3(TCCR, N, A) &= ~(1 << REG3(COM, N, B1));                       \
+        REG2(TIMSK, N) &= ~(1 << REG3(OCIE, N, A));                         \
+        REG2(TIMSK, N) &= ~(1 << REG3(OCIE, N, B));                         \
+        REG2(TIMSK, N) &= ~(1 << REG2(TOIE, N));                            \
       }                                                                     \
     }                                                                       \
     bool isEnabled() const override {                                       \

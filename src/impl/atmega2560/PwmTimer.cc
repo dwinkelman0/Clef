@@ -130,6 +130,27 @@ void GenericDirectOutputTimer<uint8_t>::setDutyCycleB(const float dutyCycle) {
   this->setCompareB(static_cast<uint8_t>(dutyCycle * 0xff));
 }
 
+template <>
+void GenericDirectOutputTimer<uint8_t>::setCallbackA(
+    const TransitionCallback callback, void *data) {
+  callbackA_ = callback;
+  callbackAData_ = data;
+}
+
+template <>
+void GenericDirectOutputTimer<uint8_t>::setCallbackB(
+    const TransitionCallback callback, void *data) {
+  callbackB_ = callback;
+  callbackBData_ = data;
+}
+
+template <>
+void GenericDirectOutputTimer<uint8_t>::setCallbackTop(
+    const TransitionCallback callback, void *data) {
+  callbackTop_ = callback;
+  callbackTopData_ = data;
+}
+
 /**
  * Create ISRs for each timer.
  */
@@ -145,6 +166,23 @@ void GenericDirectOutputTimer<uint8_t>::setDutyCycleB(const float dutyCycle) {
     }                                                           \
   }
 
+#define TIMER_PWM_ISRS(NAME, N)                 \
+  ISR(REG3(TIMER, N, _COMPA_vect)) {            \
+    if (NAME.callbackA_) {                      \
+      NAME.callbackA_(NAME.callbackAData_);     \
+    }                                           \
+  }                                             \
+  ISR(REG3(TIMER, N, _COMPB_vect)) {            \
+    if (NAME.callbackB_) {                      \
+      NAME.callbackB_(NAME.callbackBData_);     \
+    }                                           \
+  }                                             \
+  ISR(REG3(TIMER, N, _OVF_vect)) {              \
+    if (NAME.callbackTop_) {                    \
+      NAME.callbackTop_(NAME.callbackTopData_); \
+    }                                           \
+  }
+
 Timer1 timer1;
 Timer2 timer2;
 ClockTimer clockTimer;
@@ -153,6 +191,7 @@ YAxisTimer yAxisTimer;
 ZEAxisTimer zeAxisTimer;
 
 TIMER_ISRS(timer1, 0);
+TIMER_PWM_ISRS(timer2, 2);
 TIMER_ISRS(clockTimer, 1);
 TIMER_ISRS(xAxisTimer, 3);
 TIMER_ISRS(yAxisTimer, 4);
