@@ -149,6 +149,10 @@ class Time<DType, TimeUnit::USEC>
   }
 };
 
+using TimeUsecs = Time<uint64_t, TimeUnit::USEC>;
+using TimeSecs = Time<float, TimeUnit::SEC>;
+TimeSecs convertUsecsToSecs(const TimeUsecs usecs);
+
 template <typename DType>
 class Frequency
     : public GenericUnit<DType, static_cast<uint32_t>(FrequencyUnit::HZ)> {

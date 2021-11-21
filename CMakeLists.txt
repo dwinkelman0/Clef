@@ -12,7 +12,7 @@ set (Target_fw_atmega2560 clef-atmega2560)
 
 include_directories (src)
 
-file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc src/fw/kalman/*.cc)
+file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc src/fw/kalman/*.cc src/util/*.cc)
 
 if (${CLEF_TARGET} MATCHES "atmega2560")
     # Build Atmega2560 firmware
@@ -32,15 +32,16 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
     set (CMAKE_C_COMPILER ${AVR_CC})
     set (CMAKE_CXX_COMPILER ${AVR_CXX})
 
-    set (elf_file ${Target_fw_atmega2560}.elf)
-    set (eep_file ${Target_fw_atmega2560}.eep)
-    set (hex_file ${Target_fw_atmega2560}.hex)
-
     if (DEFINED CLEF_PROGRAM)
         set (FW_MAIN tests/atmega2560/${CLEF_PROGRAM}.cc)
+        set (Target_fw_atmega2560 ${Target_fw_atmega2560}.${CLEF_PROGRAM})
     else ()
         set (FW_MAIN src/main.atmega2560.cc)
     endif ()
+
+    set (elf_file ${Target_fw_atmega2560}.elf)
+    set (eep_file ${Target_fw_atmega2560}.eep)
+    set (hex_file ${Target_fw_atmega2560}.hex)
 
     file (
         GLOB FW_ATMEGA2560_SOURCES
