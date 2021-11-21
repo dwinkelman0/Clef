@@ -30,6 +30,7 @@ class HardwareTimer {
   virtual void setCompareA(const DType value) = 0;
   virtual DType getCompareA() const = 0;
   virtual void setCompareB(const DType value) = 0;
+  virtual DType getCompareB() const = 0;
   virtual void setPrescaler(const Prescaling value) = 0;
   virtual DType getMaxValue() const = 0;
   virtual Clef::Util::Frequency<float> _getMinFrequency() const = 0;
@@ -73,6 +74,8 @@ class GenericDirectOutputTimer : public Clef::If::DirectOutputPwmTimer,
   void disable() override;
   void setDutyCycleA(const float dutyCycle) override;
   void setDutyCycleB(const float dutyCycle) override;
+  float getDutyCycleA() const override;
+  float getDutyCycleB() const override;
   void setCallbackA(const TransitionCallback callback, void *data) override;
   void setCallbackB(const TransitionCallback callback, void *data) override;
   void setCallbackTop(const TransitionCallback callback, void *data) override;
@@ -132,6 +135,7 @@ template class GenericTimer<uint16_t>;
     void setCompareB(const uint8_t value) override {                         \
       REG3(OCR, N, B) = value;                                               \
     }                                                                        \
+    uint8_t getCompareB() const override { return REG3(OCR, N, B); }         \
     void setPrescaler(const HardwareTimer<uint8_t>::Prescaling value)        \
         override {                                                           \
       int actual = static_cast<int>(value);                                  \
@@ -201,6 +205,7 @@ template class GenericTimer<uint16_t>;
     void setCompareB(const uint8_t value) override {                        \
       REG3(OCR, N, B) = value;                                              \
     }                                                                       \
+    uint8_t getCompareB() const override { return REG3(OCR, N, B); }        \
     void setPrescaler(const HardwareTimer<uint8_t>::Prescaling value)       \
         override {                                                          \
       int actual = static_cast<int>(value);                                 \
@@ -268,6 +273,7 @@ template class GenericTimer<uint16_t>;
     void setCompareB(const uint16_t value) override {                        \
       REG3(OCR, N, B) = value;                                               \
     }                                                                        \
+    uint16_t getCompareB() const override { return REG3(OCR, N, B); }        \
     void setPrescaler(const HardwareTimer<uint16_t>::Prescaling value)       \
         override {                                                           \
       int actual = static_cast<int>(value);                                  \

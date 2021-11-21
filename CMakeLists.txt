@@ -32,30 +32,37 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
     set (CMAKE_C_COMPILER ${AVR_CC})
     set (CMAKE_CXX_COMPILER ${AVR_CXX})
 
+    # TODO: Consolidate this into a static library
+    file (GLOB FW_ATMEGA2560_SOURCES src/impl/atmega2560/*.cc src/impl/atmega2560/usart/*.c)
+
+    # Compile all test programs
+    file (GLOB ATMEGA2560_PROGRAMS src/main.atmega2560.cc tests/atmega2560/*.cc)
+    foreach (FW_MAIN_RAW ${ATMEGA2560_PROGRAMS})
+        get_filename_component (FW_MAIN ${FW_MAIN_RAW} NAME_WE)
+
+        set (elf_file ${Target_fw_atmega2560}.${FW_MAIN}.elf)
+        set (eep_file ${Target_fw_atmega2560}.${FW_MAIN}.eep)
+        set (hex_file ${Target_fw_atmega2560}.${FW_MAIN}.hex)
+
+        add_executable (${elf_file} ${FW_MAIN_RAW} ${FW_ATMEGA2560_SOURCES} ${FW_COMMON_IF_SOURCES})
+        set_target_properties (
+            ${elf_file}
+            PROPERTIES
+                COMPILE_FLAGS "-mmcu=atmega2560 -Os -flto -D F_CPU=16000000L -Wall -D TARGET_AVR"
+                LINK_FLAGS "-mmcu=atmega2560"
+        )
+    endforeach ()
+
+    # Choose one test program to upload to microcontroller
     if (DEFINED CLEF_PROGRAM)
-        set (FW_MAIN tests/atmega2560/${CLEF_PROGRAM}.cc)
-        set (Target_fw_atmega2560 ${Target_fw_atmega2560}.${CLEF_PROGRAM})
+        get_filename_component(FW_MAIN ${CLEF_PROGRAM} NAME_WE)
     else ()
-        set (FW_MAIN src/main.atmega2560.cc)
+        set (FW_MAIN main)
     endif ()
+    set (elf_file ${Target_fw_atmega2560}.${FW_MAIN}.elf)
+    set (eep_file ${Target_fw_atmega2560}.${FW_MAIN}.eep)
+    set (hex_file ${Target_fw_atmega2560}.${FW_MAIN}.hex)
 
-    set (elf_file ${Target_fw_atmega2560}.elf)
-    set (eep_file ${Target_fw_atmega2560}.eep)
-    set (hex_file ${Target_fw_atmega2560}.hex)
-
-    file (
-        GLOB FW_ATMEGA2560_SOURCES
-        ${FW_MAIN}
-        src/impl/atmega2560/*.cc
-        src/impl/atmega2560/usart/*.c
-    )
-    add_executable (${elf_file} ${FW_ATMEGA2560_SOURCES} ${FW_COMMON_IF_SOURCES})
-    set_target_properties (
-        ${elf_file}
-        PROPERTIES
-            COMPILE_FLAGS "-mmcu=atmega2560 -Os -flto -D F_CPU=16000000L -Wall -D TARGET_AVR"
-            LINK_FLAGS "-mmcu=atmega2560"
-    )
     add_custom_command (
         OUTPUT ${eep_file}
         COMMAND

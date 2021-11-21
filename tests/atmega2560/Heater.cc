@@ -34,15 +34,18 @@ static void onConversion(uint16_t value, void *arg) {
   sensor->injectWrapper(value / 1024.0f, sensor);
 }
 
-static void loopProcess(Clef::Fw::TemperatureSensor &sensor,
-                        const uint8_t token, const uint8_t index) {
+static void loopProcess(
+    Clef::Fw::TemperatureSensor &sensor, Clef::If::DirectOutputPwmTimer &timer,
+    float (Clef::If::DirectOutputPwmTimer::*dutyCycleGetter)() const,
+    const uint8_t token, const uint8_t index) {
   static uint16_t count = 0;
   if (sensor.checkOut(token)) {
     float temperature = sensor.read().data;
     if (count % 256 == 0 || count % 256 == 127) {
       char buffer[64];
-      sprintf(buffer, "temp %d: %d", index,
-              static_cast<int16_t>(temperature * 100));
+      sprintf(buffer, "temp %d: %d; power: %d", index,
+              static_cast<int16_t>(temperature * 100),
+              static_cast<int16_t>((timer.*dutyCycleGetter)() * 100));
       Clef::Impl::Atmega2560::serial.writeLine(buffer);
     }
     count++;
@@ -57,10 +60,10 @@ int main() {
   }
 
   Clef::Impl::Atmega2560::analogBank.init();
-  Clef::Impl::Atmega2560::analogBank.addInput(0, onConversion,
-                                              &temperatureSensor1);
-  Clef::Impl::Atmega2560::analogBank.addInput(1, onConversion,
-                                              &temperatureSensor2);
+  Clef::Impl::Atmega2560::analogBank.addInput(
+      0, &Clef::Fw::TemperatureSensor::injectWrapper, &temperatureSensor1);
+  Clef::Impl::Atmega2560::analogBank.addInput(
+      1, &Clef::Fw::TemperatureSensor::injectWrapper, &temperatureSensor2);
 
   Clef::Impl::Atmega2560::timer2.init();
   Clef::Impl::Atmega2560::timer2.setCallbackTop(
@@ -74,9 +77,11 @@ int main() {
   uint8_t token1 = temperatureSensor1.subscribe();
   uint8_t token2 = temperatureSensor2.subscribe();
   while (1) {
-    loopProcess(temperatureSensor1, token1, 1);
+    loopProcess(temperatureSensor1, Clef::Impl::Atmega2560::timer2,
+                &Clef::If::DirectOutputPwmTimer::getDutyCycleA, token1, 1);
     heater1.onLoop();
-    loopProcess(temperatureSensor2, token2, 2);
+    loopProcess(temperatureSensor2, Clef::Impl::Atmega2560::timer2,
+                &Clef::If::DirectOutputPwmTimer::getDutyCycleB, token2, 2);
     heater2.onLoop();
   }
 }

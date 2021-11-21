@@ -45,6 +45,8 @@ class DirectOutputPwmTimer : public PwmTimerCommon {
 
   virtual void setDutyCycleA(const float dutyCycle) = 0;
   virtual void setDutyCycleB(const float dutyCycle) = 0;
+  virtual float getDutyCycleA() const = 0;
+  virtual float getDutyCycleB() const = 0;
   virtual void setCallbackA(const TransitionCallback callback, void *data) = 0;
   virtual void setCallbackB(const TransitionCallback callback, void *data) = 0;
   virtual void setCallbackTop(const TransitionCallback callback,

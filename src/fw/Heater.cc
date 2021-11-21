@@ -10,10 +10,12 @@ Heater::Heater(TemperatureSensor &temperatureSensor,
     : temperatureSensor_(temperatureSensor),
       pwmTimer_(pwmTimer),
       dutyCycleSetter_(dutyCycleSetter),
-      pidController_(temperatureSensor, updateHeater, this, 0.0f, p, i, d, 0.4f,
+      pidController_(temperatureSensor, updateHeater, this, 0.0f, p, i, d, 1.0f,
                      0.1f) {}
 
 void Heater::setTarget(const float target) { pidController_.setTarget(target); }
+
+float Heater::getTarget() const { return pidController_.getTarget(); }
 
 void Heater::onLoop() { pidController_.onLoop(); }
 

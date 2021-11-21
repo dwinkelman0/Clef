@@ -17,6 +17,7 @@ class Heater {
          const float d);
 
   void setTarget(const float target);
+  float getTarget() const;
   void onLoop();
 
  private:

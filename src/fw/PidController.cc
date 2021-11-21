@@ -76,4 +76,6 @@ void PidController::onLoop() {
 }
 
 void PidController::setTarget(const float target) { target_ = target; }
+
+float PidController::getTarget() const { return target_; }
 }  // namespace Clef::Fw

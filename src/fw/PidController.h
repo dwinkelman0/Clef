@@ -23,6 +23,7 @@ class PidController {
   void reset(const float target, const Clef::Util::TimeUsecs time);
   void onLoop();
   void setTarget(const float target);
+  float getTarget() const;
 
  private:
   Sensor<float> &sensor_;

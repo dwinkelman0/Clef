@@ -9,7 +9,7 @@
 
 namespace Clef::Impl::Atmega2560 {
 AnalogBank::AnalogBank()
-    : currentInput_(0), activeInputs_(0), numActiveInputs_(0) {
+    : currentInput_(0), activeInputs_(0), inputModes_(0), numActiveInputs_(0) {
   memset(conversionCallbacks_, 0, sizeof(conversionCallbacks_));
   memset(conversionCallbackData_, 0, sizeof(conversionCallbackData_));
 }
@@ -28,30 +28,48 @@ bool AnalogBank::init() {
   return false;
 }
 
-void AnalogBank::addInput(const uint8_t number, ConversionCallback callback,
+void AnalogBank::addInput(const uint8_t number, RawConversionCallback callback,
                           void *data) {
   Clef::If::DisableInterrupts disableInterrupts;
-  activeInputs_ |= 1 << number;
-  numActiveInputs_++;
-  conversionCallbacks_[number] = callback;
-  conversionCallbackData_[number] = data;
+  inputModes_ &= ~(1 << number);
+  conversionCallbacks_[number].raw = callback;
+  addInputCommon(number, data);
+}
+
+void AnalogBank::addInput(const uint8_t number,
+                          ScaledConversionCallback callback, void *data) {
+  Clef::If::DisableInterrupts disableInterrupts;
+  inputModes_ |= 1 << number;
+  conversionCallbacks_[number].scaled = callback;
+  addInputCommon(number, data);
 }
 
 void AnalogBank::removeInput(const uint8_t number) {
   Clef::If::DisableInterrupts disableInterrupts;
   activeInputs_ &= ~(1 << number);
+  inputModes_ &= ~(1 << number);
   numActiveInputs_--;
-  conversionCallbacks_[number] = nullptr;
   conversionCallbackData_[number] = nullptr;
 }
 
 void AnalogBank::handleConversion() {
   uint8_t lsbs = ADCL;
   uint8_t msbs = ADCH;
-  if (conversionCallbacks_[currentInput_]) {
-    conversionCallbacks_[currentInput_](
-        (static_cast<uint16_t>(msbs) << 8) | static_cast<uint16_t>(lsbs),
-        conversionCallbackData_[currentInput_]);
+  uint16_t conversion =
+      (static_cast<uint16_t>(msbs) << 8) | static_cast<uint16_t>(lsbs);
+  if ((inputModes_ >> currentInput_) & 1) {
+    // Scale measurement to [0, 1] for callback
+    if (conversionCallbacks_[currentInput_].scaled) {
+      conversionCallbacks_[currentInput_].scaled(
+          static_cast<float>(conversion) / 1024.0f,
+          conversionCallbackData_[currentInput_]);
+    }
+  } else {
+    // Perform the callback with the raw data
+    if (conversionCallbacks_[currentInput_].raw) {
+      conversionCallbacks_[currentInput_].raw(
+          conversion, conversionCallbackData_[currentInput_]);
+    }
   }
 }
 
@@ -72,6 +90,12 @@ void AnalogBank::onPwmTimerEdge(void *arg) {
       }
     }
   }
+}
+
+void AnalogBank::addInputCommon(const uint8_t number, void *data) {
+  activeInputs_ |= 1 << number;
+  numActiveInputs_++;
+  conversionCallbackData_[number] = data;
 }
 
 void AnalogBank::initiateConversion(uint8_t number) {

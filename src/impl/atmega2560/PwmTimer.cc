@@ -131,6 +131,16 @@ void GenericDirectOutputTimer<uint8_t>::setDutyCycleB(const float dutyCycle) {
 }
 
 template <>
+float GenericDirectOutputTimer<uint8_t>::getDutyCycleA() const {
+  return this->getCompareA() / static_cast<float>(0xff);
+}
+
+template <>
+float GenericDirectOutputTimer<uint8_t>::getDutyCycleB() const {
+  return this->getCompareB() / static_cast<float>(0xff);
+}
+
+template <>
 void GenericDirectOutputTimer<uint8_t>::setCallbackA(
     const TransitionCallback callback, void *data) {
   callbackA_ = callback;
