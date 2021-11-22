@@ -4,6 +4,7 @@
 
 #include <fw/Config.h>
 #include <fw/ExtrusionPredictor.h>
+#include <fw/Heater.h>
 #include <fw/Sensor.h>
 #include <if/Interrupts.h>
 #include <if/PwmTimer.h>
@@ -189,12 +190,15 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
                 Clef::Fw::DisplacementSensor<SENSOR_USTEPS_PER_MM,
                                              USTEPS_PER_MM> &displacementSensor,
                 Clef::Fw::PressureSensor &pressureSensor,
-                Clef::Fw::ExtrusionPredictor &predictor)
+                Clef::Fw::ExtrusionPredictor &predictor,
+                Clef::Fw::Heater &syringeHeater, Clef::Fw::Heater &needleHeater)
       : Axis<USTEPS_PER_MM>(stepper, pwmTimer),
         displacementSensor_(displacementSensor),
         pressureSensor_(pressureSensor),
         predictor_(predictor),
-        displacementSensorOffset_(0.0f) {
+        displacementSensorOffset_(0.0f),
+        syringeHeater_(syringeHeater),
+        needleHeater_(needleHeater) {
     displacementSensorToken_ = displacementSensor_.subscribe();
     pressureSensorToken_ = pressureSensor_.subscribe();
   }
@@ -272,6 +276,10 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
     return this->stepperPositionToGcode(predictor_.getEndpoint());
   }
 
+  Clef::Fw::Heater &getSyringeHeater() { return syringeHeater_; }
+
+  Clef::Fw::Heater &getNeedleHeater() { return needleHeater_; }
+
  private:
   Clef::Fw::DisplacementSensor<SENSOR_USTEPS_PER_MM, USTEPS_PER_MM>
       &displacementSensor_;
@@ -284,6 +292,9 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
       float, Clef::Util::PositionUnit::USTEP>
       displacementSensorOffset_; /*!< Subtract this quantity from xs to get the
                                     corresponding value of xe. */
+
+  Clef::Fw::Heater syringeHeater_;
+  Clef::Fw::Heater needleHeater_;
 };
 
 class Axes : public Clef::Util::Initialized {

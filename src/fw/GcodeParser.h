@@ -30,9 +30,15 @@ extern const char *const
 extern const char
     *const INVALID_G_CODE_ERROR; /*!< The requested G-code is not supported. */
 extern const char
+    *const INVALID_M_CODE_ERROR; /*!< The requested M-code is not supported. */
+extern const char
     *const INSUFFICIENT_QUEUE_CAPACITY_ERROR; /*!< There is not enough space in
                                            the queue to insert all the actions
                                            required by the instruction. */
+extern const char *const MISSING_ARGUMENT_ERROR; /*!< The code has a required
+                                                    argument that is missing. */
+extern const char *const INVALID_ARGUMENT_ERROR; /*!< The code has an argument
+with a value that does not make sense. */
 }  // namespace Str
 
 /**
@@ -98,6 +104,9 @@ class GcodeParser {
 
   bool handleG1(Context &context, const uint16_t errorBufferSize,
                 char *const errorBuffer);
+
+  bool handleM104(Context &context, const uint16_t errorBufferSize,
+                  char *const errorBuffer);
 
  private:
   static const uint16_t size_ = 80; /*!< Static size instead of templating. */

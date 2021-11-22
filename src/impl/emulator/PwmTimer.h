@@ -12,7 +12,6 @@
 namespace Clef::Impl::Emulator {
 class GenericTimer : public Clef::If::PwmTimer {
  public:
-  GenericTimer();
   bool init() override;
   void enable() override;
   void disable() override;
@@ -35,6 +34,32 @@ class GenericTimer : public Clef::If::PwmTimer {
   TransitionCallback fallingEdgeCallback_ = nullptr;
   void *fallingEdgeCallbackData_ = nullptr;
   Clef::Util::Frequency<float> frequency_ = 1.0f;
+  bool enabled_ = false;
+};
+
+class GenericDirectOutputTimer : public Clef::If::DirectOutputPwmTimer {
+ public:
+  bool init() override;
+  void enable() override;
+  void disable() override;
+  bool isEnabled() const override;
+  void setDutyCycleA(const float dutyCycle) override;
+  void setDutyCycleB(const float dutyCycle) override;
+  float getDutyCycleA() const override;
+  float getDutyCycleB() const override;
+  void setCallbackA(const TransitionCallback callback, void *data) override;
+  void setCallbackB(const TransitionCallback callback, void *data) override;
+  void setCallbackTop(const TransitionCallback callback, void *data) override;
+
+ private:
+  float dutyCycleA_ = 0.0f;
+  TransitionCallback callbackA_ = nullptr;
+  void *callbackAData_ = nullptr;
+  float dutyCycleB_ = 0.0f;
+  TransitionCallback callbackB_ = nullptr;
+  void *callbackBData_ = nullptr;
+  TransitionCallback callbackTop_ = nullptr;
+  void *callbackTopData_ = nullptr;
   bool enabled_ = false;
 };
 }  // namespace Clef::Impl::Emulator

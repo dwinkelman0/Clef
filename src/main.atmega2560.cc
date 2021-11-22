@@ -3,6 +3,7 @@
 #include <fw/Action.h>
 #include <fw/GcodeParser.h>
 #include <if/Interrupts.h>
+#include <impl/atmega2560/AnalogBank.h>
 #include <impl/atmega2560/Clock.h>
 #include <impl/atmega2560/LimitSwitch.h>
 #include <impl/atmega2560/PwmTimer.h>
@@ -16,6 +17,16 @@ Clef::Impl::Atmega2560::Clock clock(Clef::Impl::Atmega2560::clockTimer);
 Clef::Fw::DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>
     displacementSensor(clock, 0.1);
 Clef::Fw::PressureSensor pressureSensor(clock, 1);
+Clef::Fw::TemperatureSensor syringeTemperatureSensor(clock, 10e3, 7.4e3);
+Clef::Fw::TemperatureSensor needleTemperatureSensor(clock, 10e3, 7.4e3);
+Clef::Fw::Heater syringeHeater(syringeTemperatureSensor,
+                               Clef::Impl::Atmega2560::timer2,
+                               &Clef::If::DirectOutputPwmTimer::setDutyCycleA,
+                               0.01f, 0.002f, 0.0f);
+Clef::Fw::Heater needleHeater(needleTemperatureSensor,
+                              Clef::Impl::Atmega2560::timer2,
+                              &Clef::If::DirectOutputPwmTimer::setDutyCycleB,
+                              0.01f, 0.002f, 0.0f);
 Clef::Fw::ActionQueue actionQueue;
 Clef::Fw::XYEPositionQueue xyePositionQueue;
 Clef::Fw::GcodeParser gcodeParser;
@@ -29,7 +40,7 @@ Clef::Fw::Axes::ZAxis zAxis(Clef::Impl::Atmega2560::zAxisStepper,
 Clef::Fw::Axes::EAxis eAxis(Clef::Impl::Atmega2560::eAxisStepper,
                             Clef::Impl::Atmega2560::zeAxisTimer,
                             displacementSensor, pressureSensor,
-                            extrusionPredictor);
+                            extrusionPredictor, syringeHeater, needleHeater);
 Clef::Fw::Axes axes(xAxis, yAxis, zAxis, eAxis);
 Clef::Fw::Context context({axes, gcodeParser, clock,
                            Clef::Impl::Atmega2560::serial, actionQueue,
@@ -64,34 +75,51 @@ void extruderStatus(void *arg) {
 }
 
 void checkSensors(const uint8_t displacementSensorToken,
-                  const uint8_t pressureSensorToken) {
-  if (displacementSensor.checkOut(displacementSensorToken)) {
+                  const uint8_t pressureSensorToken,
+                  const uint8_t syringeTemperatureSensorToken,
+                  const uint8_t needleTemperatureSensorToken) {
+  if (displacementSensor.isSampleReady(displacementSensorToken) &&
+      pressureSensor.isSampleReady(pressureSensorToken) &&
+      syringeTemperatureSensor.isSampleReady(syringeTemperatureSensorToken) &&
+      needleTemperatureSensor.isSampleReady(needleTemperatureSensorToken)) {
+    displacementSensor.checkOut(displacementSensorToken);
+    pressureSensor.checkOut(pressureSensorToken);
+    syringeTemperatureSensor.checkOut(syringeTemperatureSensorToken);
+    needleTemperatureSensor.checkOut(needleTemperatureSensorToken);
+
     static bool initializedExtruder = false;
     if (!initializedExtruder) {
       eAxis.setDisplacementSensorOffset(displacementSensor.readPosition());
       initializedExtruder = true;
     }
-    if (pressureSensor.checkOut(pressureSensorToken)) {
-      typename Clef::Fw::Axes::EAxis::StepperPosition extruderPosition =
-          axes.getE().getPosition();
-      Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
-                           USTEPS_PER_MM_E>
-          sensorPosition = displacementSensor.readPosition();
-      float pressure = pressureSensor.readPressure();
-      Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time =
-          displacementSensor.getMeasurementTime();
-      char buffer[64];
-      Clef::If::EnableInterrupts interrupts;
-      Clef::Impl::Atmega2560::serial1.writeStr(";t=");
-      Clef::Impl::Atmega2560::serial1.writeUint64(*time);
-      sprintf(buffer, ",xe=%ld", static_cast<uint32_t>(*extruderPosition));
-      Clef::Impl::Atmega2560::serial1.writeStr(buffer);
-      sprintf(buffer, ",xs=%ld", static_cast<uint32_t>(*sensorPosition));
-      Clef::Impl::Atmega2560::serial1.writeStr(buffer);
-      sprintf(buffer, ",P=%ld", static_cast<int32_t>(pressure));
-      Clef::Impl::Atmega2560::serial1.writeLine(buffer);
-      pressureSensor.release(pressureSensorToken);
-    }
+    typename Clef::Fw::Axes::EAxis::StepperPosition extruderPosition =
+        axes.getE().getPosition();
+    Clef::Util::Position<float, Clef::Util::PositionUnit::USTEP,
+                         USTEPS_PER_MM_E>
+        sensorPosition = displacementSensor.readPosition();
+    float pressure = pressureSensor.readPressure();
+    float syringeTemp = syringeTemperatureSensor.read().data;
+    float needleTemp = needleTemperatureSensor.read().data;
+    Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time =
+        displacementSensor.getMeasurementTime();
+    char buffer[64];
+
+    Clef::If::EnableInterrupts interrupts;
+    Clef::Impl::Atmega2560::serial1.writeStr(";t=");
+    Clef::Impl::Atmega2560::serial1.writeUint64(*time);
+    sprintf(buffer, ",xe=%ld", static_cast<uint32_t>(*extruderPosition));
+    Clef::Impl::Atmega2560::serial1.writeStr(buffer);
+    sprintf(buffer, ",xs=%ld", static_cast<uint32_t>(*sensorPosition));
+    Clef::Impl::Atmega2560::serial1.writeStr(buffer);
+    sprintf(buffer, ",P=%ld", static_cast<int32_t>(pressure));
+    Clef::Impl::Atmega2560::serial1.writeStr(buffer);
+    sprintf(buffer, ",Ts=%ld", static_cast<int32_t>(syringeTemp * 100));
+    Clef::Impl::Atmega2560::serial1.writeStr(buffer);
+    sprintf(buffer, ",Tn=%ld", static_cast<int32_t>(needleTemp * 100));
+    Clef::Impl::Atmega2560::serial1.writeLine(buffer);
+    needleTemperatureSensor.release(needleTemperatureSensorToken);
+    syringeTemperatureSensor.release(syringeTemperatureSensorToken);
+    pressureSensor.release(pressureSensorToken);
     displacementSensor.release(displacementSensorToken);
   }
 }
@@ -140,16 +168,29 @@ int main() {
   uint8_t pressureSensorToken = pressureSensor.subscribe();
   Clef::Impl::Atmega2560::timer1.setFallingEdgeCallback(startSpiRead, nullptr);
 
+  Clef::Impl::Atmega2560::analogBank.init();
+  Clef::Impl::Atmega2560::analogBank.addInput(
+      0, Clef::Fw::TemperatureSensor::injectWrapper, &syringeTemperatureSensor);
+  Clef::Impl::Atmega2560::analogBank.addInput(
+      1, Clef::Fw::TemperatureSensor::injectWrapper, &needleTemperatureSensor);
+  uint8_t syringeTemperatureSensorToken = syringeTemperatureSensor.subscribe();
+  uint8_t needleTemperatureSensorToken = needleTemperatureSensor.subscribe();
+
   Clef::Impl::Atmega2560::timer2.init();
-  Clef::Impl::Atmega2560::timer2.setDutyCycleA(0.1f);
-  Clef::Impl::Atmega2560::timer2.setDutyCycleB(0.9f);
+  Clef::Impl::Atmega2560::timer2.setCallbackTop(
+      Clef::Impl::Atmega2560::AnalogBank::onPwmTimerEdge,
+      &Clef::Impl::Atmega2560::analogBank);
   Clef::Impl::Atmega2560::timer2.enable();
 
   Clef::Fw::ActionQueue::Iterator it = actionQueue.first();
   int currentQueueSize = actionQueue.size();
   while (1) {
     gcodeParser.ingest(context);
-    checkSensors(displacementSensorToken, pressureSensorToken);
+    checkSensors(displacementSensorToken, pressureSensorToken,
+                 syringeTemperatureSensorToken, needleTemperatureSensorToken);
+    syringeHeater.onLoop();
+    needleHeater.onLoop();
+    checkSensors(displacementSensorToken, pressureSensorToken, 0, 0);
     if (it) {
       (*it)->onLoop(context);
       if ((*it)->isFinished(context)) {

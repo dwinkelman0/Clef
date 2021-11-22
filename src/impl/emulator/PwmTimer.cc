@@ -4,13 +4,13 @@
 
 namespace Clef::Impl::Emulator {
 
-GenericTimer::GenericTimer() {}
-
 bool GenericTimer::init() { return true; }
 
 void GenericTimer::enable() { enabled_ = true; }
 
 void GenericTimer::disable() { enabled_ = false; }
+
+bool GenericTimer::isEnabled() const { return enabled_; }
 
 void GenericTimer::setFrequency(const Clef::Util::Frequency<float> frequency) {
   frequency_ = frequency;
@@ -31,8 +31,6 @@ void GenericTimer::setFallingEdgeCallback(const TransitionCallback callback,
   fallingEdgeCallback_ = callback;
   fallingEdgeCallbackData_ = data;
 }
-
-bool GenericTimer::isEnabled() const { return enabled_; }
 
 Clef::Util::Frequency<float> GenericTimer::getFrequency() const {
   return frequency_;
@@ -61,5 +59,43 @@ void GenericTimer::pulseWhile(
       }
     }
   }
+}
+
+bool GenericDirectOutputTimer::init() { return true; }
+
+void GenericDirectOutputTimer::enable() { enabled_ = true; }
+
+void GenericDirectOutputTimer::disable() { enabled_ = false; }
+
+bool GenericDirectOutputTimer::isEnabled() const { return enabled_; }
+
+void GenericDirectOutputTimer::setDutyCycleA(const float dutyCycle) {
+  dutyCycleA_ = dutyCycle;
+}
+
+void GenericDirectOutputTimer::setDutyCycleB(const float dutyCycle) {
+  dutyCycleB_ = dutyCycle;
+}
+
+float GenericDirectOutputTimer::getDutyCycleA() const { return dutyCycleA_; }
+
+float GenericDirectOutputTimer::getDutyCycleB() const { return dutyCycleB_; }
+
+void GenericDirectOutputTimer::setCallbackA(const TransitionCallback callback,
+                                            void *data) {
+  callbackA_ = callback;
+  callbackAData_ = data;
+}
+
+void GenericDirectOutputTimer::setCallbackB(const TransitionCallback callback,
+                                            void *data) {
+  callbackB_ = callback;
+  callbackBData_ = data;
+}
+
+void GenericDirectOutputTimer::setCallbackTop(const TransitionCallback callback,
+                                              void *data) {
+  callbackTop_ = callback;
+  callbackTopData_ = data;
 }
 }  // namespace Clef::Impl::Emulator

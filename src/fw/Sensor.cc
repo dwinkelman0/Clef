@@ -2,6 +2,7 @@
 
 #include "Sensor.h"
 
+#include <if/Interrupts.h>
 #include <math.h>
 
 namespace Clef::Fw {
@@ -10,6 +11,7 @@ TemperatureSensor::TemperatureSensor(Clef::If::Clock &clock, const float Rt0,
     : Sensor<float>(clock), Rratio_(R0 / Rt0) {}
 
 void TemperatureSensor::injectWrapper(const float ratio, void *arg) {
+  Clef::If::EnableInterrupts enableInterrupts;
   TemperatureSensor *sensor = reinterpret_cast<TemperatureSensor *>(arg);
   float normalizedR = sensor->Rratio_ * ratio / (1 - ratio);
   sensor->inject(convertNormalizedResistanceToTemperature(normalizedR));

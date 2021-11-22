@@ -213,6 +213,18 @@ void SetFeedrate::onStart(Context &context) {
 }
 
 bool SetFeedrate::isFinished(const Context &context) const { return true; }
+
+SetTemp::SetTemp(const XYZEPosition &startPosition, Clef::Fw::Heater *heater,
+                 const float target)
+    : Action(Type::SET_TEMP, startPosition), heater_(heater), target_(target) {}
+
+void SetTemp::onStart(Context &context) {
+  if (heater_) {
+    heater_->setTarget(target_);
+  }
+}
+
+bool SetTemp::isFinished(const Context &context) const { return true; }
 }  // namespace Action
 
 ActionQueue::ActionQueue()

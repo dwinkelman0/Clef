@@ -20,7 +20,7 @@ TEST_F(ActionTest, MoveXYE) {
   action.onStart(context_);
   ASSERT_EQ(*axes_.getX().getTargetStepperPosition(), 10 * USTEPS_PER_MM_X);
   ASSERT_EQ(*axes_.getE().getExtrusionEndpoint(), 10);
-  uint64_t displacement = 3;
+  uint64_t displacement = 0;
   while (!action.isFinished(context_)) {
     displacementSensor_.inject(displacement++);
     pressureSensor_.inject(0);
@@ -28,7 +28,8 @@ TEST_F(ActionTest, MoveXYE) {
     eAxisTimer_.pulseOnce();
     action.onLoop(context_);
   }
-  ASSERT_EQ(*axes_.getX().getPosition(), 10 * USTEPS_PER_MM_X);
+  ASSERT_GE(*axes_.getX().getPosition(), 10 * USTEPS_PER_MM_X);
+  ASSERT_LT(*axes_.getX().getPosition(), 10 * USTEPS_PER_MM_X + 5);
   ASSERT_EQ(context_.xyePositionQueue.size(), 0);
 }
 }  // namespace Clef::Fw

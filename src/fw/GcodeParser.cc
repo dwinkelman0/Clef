@@ -18,7 +18,10 @@ STRING(INVALID_INT_ERROR, "invalid_int_error");
 STRING(INVALID_FLOAT_ERROR, "invalid_float_error");
 STRING(MISSING_COMMAND_CODE_ERROR, "missing_command_code_error");
 STRING(INVALID_G_CODE_ERROR, "invalid_g_code_error");
+STRING(INVALID_M_CODE_ERROR, "invalid_m_code_error");
 STRING(INSUFFICIENT_QUEUE_CAPACITY_ERROR, "alloc_error");
+STRING(MISSING_ARGUMENT_ERROR, "missing_argument_error");
+STRING(INVALID_ARGUMENT_ERROR, "invalid_argument_error");
 }  // namespace Str
 
 GcodeParser::GcodeParser() { reset(); }
@@ -110,7 +113,7 @@ bool GcodeParser::parse(const uint16_t errorBufferSize,
 bool GcodeParser::interpret(Context &context, const uint16_t errorBufferSize,
                             char *const errorBuffer) {
   // Check for a 'G' code
-  int32_t gcode;
+  int32_t gcode, mcode;
   if (parseInt('G', &gcode, 0, nullptr)) {
     switch (gcode) {
       case 0:
@@ -119,6 +122,15 @@ bool GcodeParser::interpret(Context &context, const uint16_t errorBufferSize,
       default:
         snprintf(errorBuffer, errorBufferSize, "%s: %d",
                  Str::INVALID_G_CODE_ERROR, gcode);
+        return false;
+    }
+  } else if (parseInt('M', &mcode, 0, nullptr)) {
+    switch (mcode) {
+      case 104:
+        return handleM104(context, errorBufferSize, errorBuffer);
+      default:
+        snprintf(errorBuffer, errorBufferSize, "%s: %d",
+                 Str::INVALID_M_CODE_ERROR);
         return false;
     }
   }
@@ -257,6 +269,72 @@ bool GcodeParser::handleG1(Context &context, const uint16_t errorBufferSize,
     context.serial.writeLine(";Push E");
     context.actionQueue.push(
         context, Action::MoveE(context.actionQueue.getEndPosition(), e));
+  }
+  return true;
+}
+
+bool GcodeParser::handleM104(Context &context, const uint16_t errorBufferSize,
+                             char *const errorBuffer) {
+  int32_t p; /*!< Group (i.e. bed = 0, first extruder = 1, etc.). */
+  int32_t a; /*!< Required if P != 0; 0 is syringe, 1 is needle. */
+  float s;   /*!< Target temperature. */
+  bool hasP, hasA, hasS;
+
+  // Pre-process all parameters
+  if ((hasP = hasCodeLetter('P')) &&
+      !parseInt('P', &p, errorBufferSize, errorBuffer)) {
+    return false;
+  }
+  if ((hasA = hasCodeLetter('A')) &&
+      !parseInt('A', &a, errorBufferSize, errorBuffer)) {
+    return false;
+  }
+  if ((hasS = hasCodeLetter('S')) &&
+      !parseFloat('S', &s, errorBufferSize, errorBuffer)) {
+    return false;
+  }
+
+  // Must have P and S or this is an invalid command
+  if (!hasP || !hasS) {
+    snprintf(errorBuffer, errorBufferSize, "%s: no P and/or S",
+             Str::MISSING_ARGUMENT_ERROR);
+    return false;
+  } else if (p > 1) {
+    snprintf(errorBuffer, errorBufferSize,
+             "%s: P greater than number of extruders",
+             Str::INVALID_ARGUMENT_ERROR);
+  }
+  if (p == 0 && hasA) {
+    snprintf(errorBuffer, errorBufferSize, "%s: not expecting A when P == 0",
+             Str::INVALID_ARGUMENT_ERROR);
+    return false;
+  }
+
+  // TODO: support bed heating
+  if (p == 0) {
+    snprintf(errorBuffer, errorBufferSize, "%s: bed heating is not supported",
+             Str::INVALID_ARGUMENT_ERROR);
+    return false;
+  }
+
+  // Check for space in the queue
+  uint16_t numActions = static_cast<uint16_t>(!hasA || a == 0) +
+                        static_cast<uint16_t>(!hasA || a == 1);
+  if (context.actionQueue.getCapacityFor(Action::Type::SET_TEMP) < numActions) {
+    snprintf(errorBuffer, errorBufferSize, "%s",
+             Str::INSUFFICIENT_QUEUE_CAPACITY_ERROR);
+    return false;
+  }
+
+  if (!hasA || a == 0) {
+    Action::SetTemp action(context.actionQueue.getEndPosition(),
+                           &context.axes.getE().getSyringeHeater(), s);
+    context.actionQueue.push(context, action);
+  }
+  if (!hasA || a == 1) {
+    Action::SetTemp action(context.actionQueue.getEndPosition(),
+                           &context.axes.getE().getNeedleHeater(), s);
+    context.actionQueue.push(context, action);
   }
   return true;
 }

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <fw/Axes.h>
+#include <fw/Heater.h>
 #include <if/Clock.h>
 #include <if/Serial.h>
 #include <util/PooledQueue.h>
@@ -16,7 +17,7 @@ class GcodeParser;
 class Context;
 
 namespace Action {
-enum class Type { MOVE_XY, MOVE_XYE, MOVE_E, MOVE_Z, SET_FEEDRATE };
+enum class Type { MOVE_XY, MOVE_XYE, MOVE_E, MOVE_Z, SET_FEEDRATE, SET_TEMP };
 
 /**
  * Data structure to store parameters for commands the printer to execute; every
@@ -166,6 +167,25 @@ class SetFeedrate : public Action {
  private:
   float rawFeedrateMmPerMin_;
 };
+
+class SetTemp : public Action {
+ public:
+  SetTemp() : SetTemp({0, 0, 0, 0}, nullptr, 0.0f) {}
+  SetTemp(const XYZEPosition &startPosition, Clef::Fw::Heater *heater,
+          const float target);
+
+  void onStart(Context &context) override;
+  void onLoop(Context &context) override {}
+  bool isFinished(const Context &context) const override;
+
+ private:
+  void onPush(Context &context) override {}
+  void onPop(Context &context) override {}
+
+ private:
+  Clef::Fw::Heater *heater_;
+  float target_;
+};
 }  // namespace Action
 
 struct Context {
@@ -208,6 +228,11 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
                       static_cast<const Action::SetFeedrate &>(action)) &&
                   push(&*setFeedrateQueue_.last());
         break;
+      case Action::Type::SET_TEMP:
+        success =
+            setTempQueue_.push(static_cast<const Action::SetTemp &>(action)) &&
+            push(&*setTempQueue_.last());
+        break;
     }
     if (success) {
       Iterator it = last();
@@ -236,25 +261,33 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
       case Action::Type::SET_FEEDRATE:
         setFeedrateQueue_.pop();
         break;
+      case Action::Type::SET_TEMP:
+        setTempQueue_.pop();
+        break;
     }
     pop();
   }
   XYZEPosition getStartPosition() const;
   XYZEPosition getEndPosition() const;
-  bool hasCapacityFor(const Action::Type type) const {
+  uint16_t getCapacityFor(const Action::Type type) const {
     switch (type) {
       case Action::Type::MOVE_XY:
-        return moveXyQueue_.getNumSpacesLeft() > 0;
+        return moveXyQueue_.getNumSpacesLeft();
       case Action::Type::MOVE_XYE:
-        return moveXyeQueue_.getNumSpacesLeft() > 0;
+        return moveXyeQueue_.getNumSpacesLeft();
       case Action::Type::MOVE_E:
-        return moveEQueue_.getNumSpacesLeft() > 0;
+        return moveEQueue_.getNumSpacesLeft();
       case Action::Type::MOVE_Z:
-        return moveZQueue_.getNumSpacesLeft() > 0;
+        return moveZQueue_.getNumSpacesLeft();
       case Action::Type::SET_FEEDRATE:
-        return setFeedrateQueue_.getNumSpacesLeft() > 0;
+        return setFeedrateQueue_.getNumSpacesLeft();
+      case Action::Type::SET_TEMP:
+        return setTempQueue_.getNumSpacesLeft();
     }
-    return false;
+    return 0;
+  }
+  bool hasCapacityFor(const Action::Type type) const {
+    return getCapacityFor(type) > 0;
   }
 
   /**
@@ -283,5 +316,6 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
   Clef::Util::PooledQueue<Action::MoveE, 4> moveEQueue_;
   Clef::Util::PooledQueue<Action::MoveZ, 4> moveZQueue_;
   Clef::Util::PooledQueue<Action::SetFeedrate, 4> setFeedrateQueue_;
+  Clef::Util::PooledQueue<Action::SetTemp, 4> setTempQueue_;
 };
 }  // namespace Clef::Fw

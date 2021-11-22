@@ -32,6 +32,7 @@ TEST_F(SensorTest, SingleSubscriber) {
   uint8_t token = subscribe();
 
   // Start in NULL state
+  ASSERT_FALSE(isSampleReady(token));
   ASSERT_FALSE(checkOut(token));
 
   // Transition to DATA_READY state
@@ -39,7 +40,9 @@ TEST_F(SensorTest, SingleSubscriber) {
   checkReceivedUpdate();
 
   // Transition to CHECKED_OUT state
+  ASSERT_TRUE(isSampleReady(token));
   ASSERT_TRUE(checkOut(token));
+  ASSERT_FALSE(isSampleReady(token));
   ASSERT_EQ(read().data, 1.0f);
   Time t0 = read().time;
 
@@ -65,6 +68,7 @@ TEST_F(SensorTest, SingleSubscriber) {
   ASSERT_FALSE(receivedUpdate_);
   inject(3.0f);
   ASSERT_FALSE(receivedUpdate_);
+  ASSERT_FALSE(isSampleReady(token));
   ASSERT_EQ(read().data, 2.0f);
 
   // Transition to DATA_READY state
@@ -87,7 +91,9 @@ TEST_F(SensorTest, MultipleSubscribers) {
   uint8_t token2 = subscribe();
 
   // Start in NULL state
+  ASSERT_FALSE(isSampleReady(token1));
   ASSERT_FALSE(checkOut(token1));
+  ASSERT_FALSE(isSampleReady(token2));
   ASSERT_FALSE(checkOut(token2));
 
   // Transition to DATA_READY state
@@ -95,19 +101,29 @@ TEST_F(SensorTest, MultipleSubscribers) {
   checkReceivedUpdate();
 
   // Transition to CHECKED_OUT state
+  ASSERT_TRUE(isSampleReady(token1));
+  ASSERT_TRUE(isSampleReady(token2));
   ASSERT_TRUE(checkOut(token1));
+  ASSERT_FALSE(isSampleReady(token1));
+  ASSERT_TRUE(isSampleReady(token2));
   ASSERT_EQ(read().data, 1.0f);
 
   // Transition to DATA_READY state and not be able to check out same token
   release(token1);
   ASSERT_FALSE(checkOut(token1));
-  
+  ASSERT_FALSE(isSampleReady(token1));
+  ASSERT_TRUE(isSampleReady(token2));
+
   // Transition to CHECKED_OUT state
   ASSERT_TRUE(checkOut(token2));
+  ASSERT_FALSE(isSampleReady(token1));
+  ASSERT_FALSE(isSampleReady(token2));
   ASSERT_EQ(read().data, 1.0f);
 
   // Transition to NULL state
   release(token2);
+  ASSERT_FALSE(isSampleReady(token1));
+  ASSERT_FALSE(isSampleReady(token2));
   ASSERT_FALSE(checkOut(token1));
 
   // Transition to DATA_READY state

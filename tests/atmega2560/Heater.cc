@@ -28,12 +28,6 @@ static Clef::Fw::Heater heater2(temperatureSensor2,
                                 &Clef::If::DirectOutputPwmTimer::setDutyCycleB,
                                 0.01f, 0.002f, 0.0f);
 
-static void onConversion(uint16_t value, void *arg) {
-  Clef::Fw::TemperatureSensor *sensor =
-      reinterpret_cast<Clef::Fw::TemperatureSensor *>(arg);
-  sensor->injectWrapper(value / 1024.0f, sensor);
-}
-
 static void loopProcess(
     Clef::Fw::TemperatureSensor &sensor, Clef::If::DirectOutputPwmTimer &timer,
     float (Clef::If::DirectOutputPwmTimer::*dutyCycleGetter)() const,

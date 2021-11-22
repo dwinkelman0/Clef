@@ -24,11 +24,16 @@ class IntegrationFixture : public testing::Test {
   Clef::Impl::Emulator::GenericTimer yAxisTimer_;
   Clef::Impl::Emulator::GenericTimer zAxisTimer_;
   Clef::Impl::Emulator::GenericTimer eAxisTimer_;
+  Clef::Impl::Emulator::GenericDirectOutputTimer sensingTimer_;
   Clef::Impl::Emulator::DisplacementSensorInput displacementSensorInput_;
   DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>
       displacementSensor_;
   PressureSensor pressureSensor_;
   LinearExtrusionPredictor extrusionPredictor_;
+  TemperatureSensor syringeTemperatureSensor_;
+  TemperatureSensor needleTemperatureSensor_;
+  Heater syringeHeater_;
+  Heater needleHeater_;
   Axes::XAxis xAxis_;
   Axes::YAxis yAxis_;
   Axes::ZAxis zAxis_;

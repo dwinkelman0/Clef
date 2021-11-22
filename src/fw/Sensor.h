@@ -78,6 +78,19 @@ class Sensor {
     }
   }
 
+  bool isSampleReady(const uint8_t token) const {
+    Clef::If::DisableInterrupts noInterrupts;
+    switch (state_) {
+      case State::NO_DATA:
+        return false;
+      case State::DATA_READY:
+      case State::CHECKED_OUT:
+      case State::CHECKED_OUT_AND_STAGED:
+        return ~checkedOutSubscribers_ & token;
+    }
+    return false;
+  }
+
   /**
    * Transition the sensor to a state in which it is safe to read.
    */
