@@ -17,8 +17,8 @@ file (GLOB FW_COMMON_IF_SOURCES src/if/*.cc src/fw/*.cc src/fw/kalman/*.cc src/u
 if (${CLEF_TARGET} MATCHES "atmega2560")
     # Build Atmega2560 firmware
     # https://github.com/mkleemann/cmake-avr/blob/master/generic-gcc-avr.cmake
-    set (AVR_TOOLCHAIN_PATH /home/dwinkelman/Downloads/arduino-1.8.12/hardware/tools/avr/bin)
-    set (AVRDUDE_CONFIG_PATH /home/dwinkelman/Downloads/arduino-1.8.12/hardware/tools/avr/etc/avrdude.conf)
+    set (AVR_TOOLCHAIN_PATH ${CLEF_ARDUINO_PATH}/hardware/tools/avr/bin)
+    set (AVRDUDE_CONFIG_PATH ${CLEF_ARDUINO_PATH}/hardware/tools/avr/etc/avrdude.conf)
     find_program (AVR_CC avr-gcc REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
     find_program (AVR_CXX avr-g++ REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
     find_program (AVR_OBJCOPY avr-objcopy REQUIRED PATHS ${AVR_TOOLCHAIN_PATH})
@@ -111,6 +111,7 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
                 -P ${CLEF_PORT}
                 -b ${CLEF_BAUD}
                 -U flash:w:${hex_file}:i
+		-C ${AVRDUDE_CONFIG_PATH}
             DEPENDS ${Target_fw_atmega2560}
             COMMENT "Uploading ${hex_file}"
         )
@@ -124,6 +125,7 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
                 -P ${CLEF_PORT}
                 -b ${CLEF_BAUD}
                 -U eeprom:w:${eep_file}:i
+		-C ${AVRDUDE_CONFIG_PATH}
             DEPENDS ${Target_fw_atmega2560} ${Target_fw_atmega2560}-upload-hex
             COMMENT "Uploading ${eep_file}"
         )
