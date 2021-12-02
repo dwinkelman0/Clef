@@ -51,6 +51,10 @@ if (${CLEF_TARGET} MATCHES "atmega2560")
                 COMPILE_FLAGS "-mmcu=atmega2560 -Os -flto -D F_CPU=16000000L -Wall -D TARGET_AVR"
                 LINK_FLAGS "-mmcu=atmega2560"
         )
+        target_compile_definitions (
+            ${elf_file}
+            PRIVATE
+                PRESSURE_SENSOR_${PRESSURE_SENSOR})
     endforeach ()
 
     # Choose one test program to upload to microcontroller

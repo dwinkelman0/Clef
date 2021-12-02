@@ -162,12 +162,6 @@ int main() {
       &displacementSensor);
   uint8_t displacementSensorToken = displacementSensor.subscribe();
 
-  Clef::Impl::Atmega2560::spi.init();
-  Clef::Impl::Atmega2560::spi.setReadCompleteCallback(
-      Clef::Fw::PressureSensor::injectWrapper, &pressureSensor);
-  uint8_t pressureSensorToken = pressureSensor.subscribe();
-  Clef::Impl::Atmega2560::timer1.setFallingEdgeCallback(startSpiRead, nullptr);
-
   Clef::Impl::Atmega2560::analogBank.init();
   Clef::Impl::Atmega2560::analogBank.addInput(
       0, Clef::Fw::TemperatureSensor::injectWrapper, &syringeTemperatureSensor);
@@ -175,6 +169,21 @@ int main() {
       1, Clef::Fw::TemperatureSensor::injectWrapper, &needleTemperatureSensor);
   uint8_t syringeTemperatureSensorToken = syringeTemperatureSensor.subscribe();
   uint8_t needleTemperatureSensorToken = needleTemperatureSensor.subscribe();
+
+#ifdef PRESSURE_SENSOR_SPI
+  Clef::Impl::Atmega2560::spi.init();
+  Clef::Impl::Atmega2560::spi.setReadCompleteCallback(
+      Clef::Fw::PressureSensor::injectWrapper, &pressureSensor);
+  Clef::Impl::Atmega2560::timer1.setFallingEdgeCallback(startSpiRead, nullptr);
+#else
+#ifdef PRESSURE_SENSOR_ANALOG
+  Clef::Impl::Atmega2560::analogBank.addInput(
+      7, Clef::Fw::PressureSensor::injectWrapper, &pressureSensor);
+#else
+#error You must explicitly specify the kind of pressure sensor used
+#endif
+#endif
+  uint8_t pressureSensorToken = pressureSensor.subscribe();
 
   Clef::Impl::Atmega2560::timer2.init();
   Clef::Impl::Atmega2560::timer2.setCallbackTop(
