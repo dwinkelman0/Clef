@@ -178,7 +178,7 @@ int main() {
 #else
 #ifdef PRESSURE_SENSOR_ANALOG
   Clef::Impl::Atmega2560::analogBank.addInput(
-      7, Clef::Fw::PressureSensor::injectWrapper, &pressureSensor);
+      7, Clef::Fw::PressureSensor::injectWrapperAnalog, &pressureSensor);
 #else
 #error You must explicitly specify the kind of pressure sensor used
 #endif

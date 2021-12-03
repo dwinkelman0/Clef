@@ -286,6 +286,14 @@ class PressureSensor : public Sensor<uint16_t> {
     sensor->inject(rawData);
   }
 
+  /**
+   * Inject wrapper is tailered for analog pin callback format.
+   */
+  static void injectWrapperAnalog(const float data, void *arg) {
+    PressureSensor *sensor = reinterpret_cast<PressureSensor *>(arg);
+    sensor->inject(static_cast<uint16_t>(data * 0x3ff));
+  }
+
   float readPressure() const { return currentPressure_; }
 
   typename Sensor<uint16_t>::Time getMeasurementTime() const {
