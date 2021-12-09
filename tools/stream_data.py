@@ -26,6 +26,7 @@ parser.add_argument("--output-dir", type=str, default="data-{}".format(
     datetime.datetime.now().isoformat()))
 parser.add_argument("--time", type=int, default=0)
 parser.add_argument("--stdout", action="store_true", default=False)
+parser.add_argument("--no-csv", action="store_true", default=False)
 
 
 def parseDatapoint(datapoint):
@@ -33,12 +34,13 @@ def parseDatapoint(datapoint):
     return parts[0], int(parts[1])
 
 
-def collect(dirname, port, baud, runtime, dumpToStdout):
+def collect(dirname, port, baud, runtime, dumpToStdout, formats):
     data = {}
 
     ser = serial.Serial(port, baud, timeout=1)
     time.sleep(2)
     t0 = time.time()
+    lastTime = 0
     try:
         while (runtime > 0 and time.time() < (t0 + runtime)) or runtime == 0:
             message = ser.readline().decode("utf-8").rstrip()
@@ -53,9 +55,13 @@ def collect(dirname, port, baud, runtime, dumpToStdout):
             datapoints = DATAPOINT_RE.findall(message)
             if len(datapoints) == 0 or parseDatapoint(datapoints[0])[0] != "t":
                 continue
+            t = parseDatapoint(datapoints[0])[1]
+            # Prevent duplicate samples
+            if lastTime >= t:
+                continue
+            lastTime = t
             if dumpToStdout:
                 print(datapoints)
-            t = parseDatapoint(datapoints[0])[1]
             for datapoint in datapoints[1:]:
                 name, value = parseDatapoint(datapoint)
                 if name == "t":
@@ -73,11 +79,18 @@ def collect(dirname, port, baud, runtime, dumpToStdout):
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     for name, array in data.items():
-        fname = "{0}/{1}-vs-t.npy".format(dirname, name)
+        fname = "{0}/{1}-vs-t".format(dirname, name)
         print("Saving {0} samples to {1}....".format(len(array), fname))
-        np.save(fname, np.array(array))
+        if "npy" in formats:
+            np.save("{}.npy".format(fname), np.array(array))
+        if "csv" in formats:
+            np.savetxt("{}.csv".format(fname), np.array(array), delimiter=",")
 
 
 if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
-    collect(args.output_dir, args.port, args.baud, args.time, args.stdout)
+    formats = {"npy"}
+    if not args.no_csv:
+        formats.add("csv")
+    collect(args.output_dir, args.port, args.baud,
+            args.time, args.stdout, formats)
