@@ -38,13 +38,13 @@ class UsartPartial : public Clef::If::RWSerial {
   }
 };
 
-#define USART(N)                                                        \
+#define USART(N, BAUDRATE)                                              \
  public                                                                 \
   UsartPartial {                                                        \
    public:                                                              \
     bool init() override {                                              \
       if (Clef::Util::Initialized::init()) {                            \
-        REG3(uart, N, _init)(BAUD_CALC(SERIAL_BAUDRATE));               \
+        REG3(uart, N, _init)(BAUD_CALC(BAUDRATE));                      \
         return true;                                                    \
       }                                                                 \
       return false;                                                     \
@@ -71,11 +71,14 @@ class UsartPartial : public Clef::If::RWSerial {
     }                                                                   \
   }
 
-class Usart0 : USART(0);
+class Usart0 : USART(0, SERIAL_BAUDRATE);
 extern Usart0 serial;
 
-class Usart1 : USART(1);
+class Usart1 : USART(1, SERIAL_BAUDRATE);
 extern Usart1 serial1;
+
+class Usart2 : USART(2, MASS_SENSOR_SERIAL_BAUDRATE);
+extern Usart2 serial2;
 
 class Spi : public Clef::If::RSpi {
  public:

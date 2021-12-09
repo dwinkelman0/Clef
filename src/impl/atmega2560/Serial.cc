@@ -9,6 +9,7 @@
 namespace Clef::Impl::Atmega2560 {
 Usart0 serial;
 Usart1 serial1;
+Usart2 serial2;
 
 namespace {
 class WPinSS W_REGISTER_BOOL(B, 0, true);    /*!< Pin 53. */

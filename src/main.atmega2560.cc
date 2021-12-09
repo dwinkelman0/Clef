@@ -17,6 +17,7 @@ Clef::Impl::Atmega2560::Clock clock(Clef::Impl::Atmega2560::clockTimer);
 Clef::Fw::DisplacementSensor<USTEPS_PER_MM_DISPLACEMENT, USTEPS_PER_MM_E>
     displacementSensor(clock, 0.1);
 Clef::Fw::PressureSensor pressureSensor(clock, 1);
+Clef::Fw::MassSensor massSensor(clock, Clef::Impl::Atmega2560::serial2);
 Clef::Fw::TemperatureSensor syringeTemperatureSensor(clock, 10e3, 7.4e3);
 Clef::Fw::TemperatureSensor needleTemperatureSensor(clock, 10e3, 7.4e3);
 Clef::Fw::Heater syringeHeater(syringeTemperatureSensor,
@@ -77,7 +78,8 @@ void extruderStatus(void *arg) {
 void checkSensors(const uint8_t displacementSensorToken,
                   const uint8_t pressureSensorToken,
                   const uint8_t syringeTemperatureSensorToken,
-                  const uint8_t needleTemperatureSensorToken) {
+                  const uint8_t needleTemperatureSensorToken,
+                  const uint8_t massSensorToken) {
   if (displacementSensor.isSampleReady(displacementSensorToken) &&
       pressureSensor.isSampleReady(pressureSensorToken) &&
       syringeTemperatureSensor.isSampleReady(syringeTemperatureSensorToken) &&
@@ -100,8 +102,7 @@ void checkSensors(const uint8_t displacementSensorToken,
     float pressure = pressureSensor.readPressure();
     float syringeTemp = syringeTemperatureSensor.read().data;
     float needleTemp = needleTemperatureSensor.read().data;
-    Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::USEC> time =
-        displacementSensor.getMeasurementTime();
+    Clef::Util::TimeUsecs time = displacementSensor.getMeasurementTime();
     char buffer[64];
 
     Clef::If::EnableInterrupts interrupts;
@@ -117,10 +118,25 @@ void checkSensors(const uint8_t displacementSensorToken,
     Clef::Impl::Atmega2560::serial1.writeStr(buffer);
     sprintf(buffer, ",Tn=%ld", static_cast<int32_t>(needleTemp * 100));
     Clef::Impl::Atmega2560::serial1.writeLine(buffer);
+
     needleTemperatureSensor.release(needleTemperatureSensorToken);
     syringeTemperatureSensor.release(syringeTemperatureSensorToken);
     pressureSensor.release(pressureSensorToken);
     displacementSensor.release(displacementSensorToken);
+  }
+  if (massSensor.isSampleReady(massSensorToken)) {
+    massSensor.checkOut(massSensorToken);
+    int32_t mass = massSensor.read().data;
+    Clef::Util::TimeUsecs time = massSensor.read().time;
+    char buffer[64];
+
+    Clef::If::EnableInterrupts interrupts;
+    Clef::Impl::Atmega2560::serial1.writeStr(";t=");
+    Clef::Impl::Atmega2560::serial1.writeUint64(*time);
+    sprintf(buffer, ",m=%ld", mass);
+    Clef::Impl::Atmega2560::serial1.writeLine(buffer);
+
+    massSensor.release(massSensorToken);
   }
 }
 
@@ -136,6 +152,7 @@ void limitSwitchAction(void *arg, const uint8_t arg2) {
 int main() {
   Clef::Impl::Atmega2560::serial.init();
   Clef::Impl::Atmega2560::serial1.init();
+  Clef::Impl::Atmega2560::serial2.init();
   if (clock.init()) {
     Clef::Impl::Atmega2560::serial.writeLine(";;;;;;;;");
     Clef::Impl::Atmega2560::serial1.writeLine(";;;;;;;;");
@@ -170,6 +187,8 @@ int main() {
   uint8_t syringeTemperatureSensorToken = syringeTemperatureSensor.subscribe();
   uint8_t needleTemperatureSensorToken = needleTemperatureSensor.subscribe();
 
+  uint8_t massSensorToken = massSensor.subscribe();
+
 #ifdef PRESSURE_SENSOR_SPI
   Clef::Impl::Atmega2560::spi.init();
   Clef::Impl::Atmega2560::spi.setReadCompleteCallback(
@@ -195,11 +214,12 @@ int main() {
   int currentQueueSize = actionQueue.size();
   while (1) {
     gcodeParser.ingest(context);
+    massSensor.ingest(Clef::Impl::Atmega2560::serial);
     checkSensors(displacementSensorToken, pressureSensorToken,
-                 syringeTemperatureSensorToken, needleTemperatureSensorToken);
+                 syringeTemperatureSensorToken, needleTemperatureSensorToken,
+                 massSensorToken);
     syringeHeater.onLoop();
     needleHeater.onLoop();
-    checkSensors(displacementSensorToken, pressureSensorToken, 0, 0);
     if (it) {
       (*it)->onLoop(context);
       if ((*it)->isFinished(context)) {

@@ -5,6 +5,7 @@
 #include <fw/Config.h>
 #include <if/Clock.h>
 #include <if/Interrupts.h>
+#include <if/Serial.h>
 #include <util/Initialized.h>
 #include <util/Units.h>
 
@@ -334,5 +335,27 @@ class TemperatureSensor : public Sensor<float> {
  private:
   static float convertNormalizedResistanceToTemperature(const float R);
   float Rratio_;
+};
+
+/**
+ * Mass is in milligrams.
+ */
+class MassSensor : public Sensor<int32_t> {
+ public:
+  MassSensor(Clef::If::Clock &clock, Clef::If::RSerial &serial);
+
+  void ingest(Clef::If::RWSerial &debugSerial); /*!< Read as many characters as
+                                                   possible from serial. */
+
+ private:
+  void reset();
+  bool append(const char newChar);
+  bool parse();
+
+ private:
+  Clef::If::RSerial &serial_;
+  static const uint16_t size_ = 80; /*!< Static size instead of templating. */
+  char buffer_[size_]; /*!< Accumulate characters until a line is complete. */
+  char *head_; /*!< Points at the next available buffer_ char to fill. */
 };
 }  // namespace Clef::Fw

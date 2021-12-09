@@ -14,3 +14,4 @@
 // Choose a low-ish frequency because there is something weird with the library
 // that causes it to drop bits while receiving.
 #define SERIAL_BAUDRATE 57600
+#define MASS_SENSOR_SERIAL_BAUDRATE 9600
