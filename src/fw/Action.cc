@@ -228,20 +228,35 @@ bool SetTemp::isFinished(const Context &context) const { return true; }
 
 WaitFor::WaitFor(const XYZEPosition &startPosition, const Predicate predicate,
                  const void *arg)
-    : Action(Type::WAIT_FOR, startPosition), predicate_(predicate), arg_(arg) {}
+    : Action(Type::WAIT_FOR, startPosition),
+      predicate_(predicate),
+      arg_(arg),
+      time_(0) {}
+
+WaitFor::WaitFor(const XYZEPosition &startPosition, const Predicate predicate,
+                 const void *arg, const Clef::Util::TimeUsecs time)
+    : Action(Type::WAIT_FOR, startPosition),
+      predicate_(predicate),
+      arg_(arg),
+      time_(time) {}
 
 bool WaitFor::isFinished(const Context &context) const {
   if (!predicate_) {
     return true;
   } else {
-    return predicate_(arg_);
+    return (this->*predicate_)(arg_);
   }
 }
 
-bool WaitFor::temperaturesHaveReachedTargets(const void *arg) {
+bool WaitFor::temperaturesHaveReachedTargets(const void *arg) const {
   const Context *context = reinterpret_cast<const Context *>(arg);
   return context->axes.getE().getSyringeHeater().isAtTarget() &&
          context->axes.getE().getNeedleHeater().isAtTarget();
+}
+
+bool WaitFor::timeHasElapsed(const void *arg) const {
+  const Context *context = reinterpret_cast<const Context *>(arg);
+  return context->clock.getMicros() > time_;
 }
 }  // namespace Action
 

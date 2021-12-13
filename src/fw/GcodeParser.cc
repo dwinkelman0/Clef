@@ -130,6 +130,8 @@ bool GcodeParser::interpret(Context &context, const uint16_t errorBufferSize,
         return handleM104(context, errorBufferSize, errorBuffer);
       case 116:
         return handleM116(context, errorBufferSize, errorBuffer);
+      case 137:
+        return handleM137(context, errorBufferSize, errorBuffer);
       default:
         snprintf(errorBuffer, errorBufferSize, "%s: %d",
                  Str::INVALID_M_CODE_ERROR);
@@ -351,10 +353,42 @@ bool GcodeParser::handleM116(Context &context, const uint16_t errorBufferSize,
     return false;
   }
   Action::WaitFor action(context.actionQueue.getEndPosition(),
-                         Action::WaitFor::temperaturesHaveReachedTargets,
+                         &Action::WaitFor::temperaturesHaveReachedTargets,
                          &context);
   context.actionQueue.push(context, action);
   context.serial.writeLine(";wait for temps");
+  return true;
+}
+
+bool GcodeParser::handleM137(Context &context, const uint16_t errorBufferSize,
+                             char *const errorBuffer) {
+  int32_t s;
+  bool hasS;
+
+  if ((hasS = hasCodeLetter('S')) &&
+      !parseInt('S', &s, errorBufferSize, errorBuffer)) {
+    return false;
+  }
+  // Must S or this is an invalid command
+  if (!hasS) {
+    snprintf(errorBuffer, errorBufferSize, "%s: no S",
+             Str::MISSING_ARGUMENT_ERROR);
+    return false;
+  }
+
+  if (context.actionQueue.getCapacityFor(Action::Type::WAIT_FOR) < 1) {
+    snprintf(errorBuffer, errorBufferSize, "%s",
+             Str::INSUFFICIENT_QUEUE_CAPACITY_ERROR);
+    return false;
+  }
+  Action::WaitFor action(
+      context.actionQueue.getEndPosition(), &Action::WaitFor::timeHasElapsed,
+      &context,
+      context.clock.getMicros() +
+          Clef::Util::TimeUsecs(
+              Clef::Util::Time<uint64_t, Clef::Util::TimeUnit::SEC>(s)));
+  context.actionQueue.push(context, action);
+  context.serial.writeLine(";wait for time");
   return true;
 }
 }  // namespace Clef::Fw

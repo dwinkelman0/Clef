@@ -197,17 +197,20 @@ class SetTemp : public Action {
 
 class WaitFor : public Action {
  public:
-  using Predicate = bool (*)(const void *);
+  using Predicate = bool (WaitFor::*)(const void *) const;
 
   WaitFor() : WaitFor({0, 0, 0, 0}, nullptr, nullptr) {}
   WaitFor(const XYZEPosition &startPosition, const Predicate predicate,
           const void *arg);
+  WaitFor(const XYZEPosition &startPosition, const Predicate predicate,
+          const void *arg, const Clef::Util::TimeUsecs time);
 
   void onStart(Context &context) override {}
   void onLoop(Context &context) override {}
   bool isFinished(const Context &context) const override;
 
-  static bool temperaturesHaveReachedTargets(const void *arg);
+  bool temperaturesHaveReachedTargets(const void *arg) const;
+  bool timeHasElapsed(const void *arg) const;
 
  private:
   void onPush(Context &context) override {}
@@ -216,6 +219,7 @@ class WaitFor : public Action {
  private:
   Predicate predicate_;
   const void *arg_;
+  Clef::Util::TimeUsecs time_;
 };
 }  // namespace Action
 
