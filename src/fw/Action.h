@@ -17,7 +17,15 @@ class GcodeParser;
 class Context;
 
 namespace Action {
-enum class Type { MOVE_XY, MOVE_XYE, MOVE_E, MOVE_Z, SET_FEEDRATE, SET_TEMP };
+enum class Type {
+  MOVE_XY,
+  MOVE_XYE,
+  MOVE_E,
+  MOVE_Z,
+  SET_FEEDRATE,
+  SET_TEMP,
+  WAIT_FOR
+};
 
 /**
  * Data structure to store parameters for commands the printer to execute; every
@@ -186,6 +194,29 @@ class SetTemp : public Action {
   Clef::Fw::Heater *heater_;
   float target_;
 };
+
+class WaitFor : public Action {
+ public:
+  using Predicate = bool (*)(const void *);
+
+  WaitFor() : WaitFor({0, 0, 0, 0}, nullptr, nullptr) {}
+  WaitFor(const XYZEPosition &startPosition, const Predicate predicate,
+          const void *arg);
+
+  void onStart(Context &context) override {}
+  void onLoop(Context &context) override {}
+  bool isFinished(const Context &context) const override;
+
+  static bool temperaturesHaveReachedTargets(const void *arg);
+
+ private:
+  void onPush(Context &context) override {}
+  void onPop(Context &context) override {}
+
+ private:
+  Predicate predicate_;
+  const void *arg_;
+};
 }  // namespace Action
 
 struct Context {
@@ -233,6 +264,11 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
             setTempQueue_.push(static_cast<const Action::SetTemp &>(action)) &&
             push(&*setTempQueue_.last());
         break;
+      case Action::Type::WAIT_FOR:
+        success =
+            waitForQueue_.push(static_cast<const Action::WaitFor &>(action)) &&
+            push(&*waitForQueue_.last());
+        break;
     }
     if (success) {
       Iterator it = last();
@@ -264,6 +300,9 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
       case Action::Type::SET_TEMP:
         setTempQueue_.pop();
         break;
+      case Action::Type::WAIT_FOR:
+        waitForQueue_.pop();
+        break;
     }
     pop();
   }
@@ -283,6 +322,8 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
         return setFeedrateQueue_.getNumSpacesLeft();
       case Action::Type::SET_TEMP:
         return setTempQueue_.getNumSpacesLeft();
+      case Action::Type::WAIT_FOR:
+        return waitForQueue_.getNumSpacesLeft();
     }
     return 0;
   }
@@ -317,5 +358,6 @@ class ActionQueue : public Clef::Util::PooledQueue<Action::Action *, 32> {
   Clef::Util::PooledQueue<Action::MoveZ, 4> moveZQueue_;
   Clef::Util::PooledQueue<Action::SetFeedrate, 4> setFeedrateQueue_;
   Clef::Util::PooledQueue<Action::SetTemp, 4> setTempQueue_;
+  Clef::Util::PooledQueue<Action::WaitFor, 4> waitForQueue_;
 };
 }  // namespace Clef::Fw

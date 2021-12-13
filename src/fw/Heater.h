@@ -18,13 +18,12 @@ class Heater {
 
   void setTarget(const float target);
   float getTarget() const;
+  bool isAtTarget() const;
   void onLoop();
 
  private:
   static void updateHeater(const float ratio, void *arg);
 
-  TemperatureSensor &temperatureSensor_;
-  uint8_t temperatureSensorToken_;
   Clef::If::DirectOutputPwmTimer &pwmTimer_;
   DutyCycleSetter dutyCycleSetter_;
   PidController pidController_;

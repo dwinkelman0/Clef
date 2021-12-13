@@ -293,8 +293,8 @@ class ExtrusionAxis : public Axis<USTEPS_PER_MM> {
       displacementSensorOffset_; /*!< Subtract this quantity from xs to get the
                                     corresponding value of xe. */
 
-  Clef::Fw::Heater syringeHeater_;
-  Clef::Fw::Heater needleHeater_;
+  Clef::Fw::Heater &syringeHeater_;
+  Clef::Fw::Heater &needleHeater_;
 };
 
 class Axes : public Clef::Util::Initialized {

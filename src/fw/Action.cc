@@ -225,6 +225,24 @@ void SetTemp::onStart(Context &context) {
 }
 
 bool SetTemp::isFinished(const Context &context) const { return true; }
+
+WaitFor::WaitFor(const XYZEPosition &startPosition, const Predicate predicate,
+                 const void *arg)
+    : Action(Type::WAIT_FOR, startPosition), predicate_(predicate), arg_(arg) {}
+
+bool WaitFor::isFinished(const Context &context) const {
+  if (!predicate_) {
+    return true;
+  } else {
+    return predicate_(arg_);
+  }
+}
+
+bool WaitFor::temperaturesHaveReachedTargets(const void *arg) {
+  const Context *context = reinterpret_cast<const Context *>(arg);
+  return context->axes.getE().getSyringeHeater().isAtTarget() &&
+         context->axes.getE().getNeedleHeater().isAtTarget();
+}
 }  // namespace Action
 
 ActionQueue::ActionQueue()

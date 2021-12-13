@@ -7,8 +7,7 @@ Heater::Heater(TemperatureSensor &temperatureSensor,
                Clef::If::DirectOutputPwmTimer &pwmTimer,
                const DutyCycleSetter dutyCycleSetter, const float p,
                const float i, const float d)
-    : temperatureSensor_(temperatureSensor),
-      pwmTimer_(pwmTimer),
+    : pwmTimer_(pwmTimer),
       dutyCycleSetter_(dutyCycleSetter),
       pidController_(temperatureSensor, updateHeater, this, 0.0f, p, i, d, 1.0f,
                      0.1f) {}
@@ -16,6 +15,8 @@ Heater::Heater(TemperatureSensor &temperatureSensor,
 void Heater::setTarget(const float target) { pidController_.setTarget(target); }
 
 float Heater::getTarget() const { return pidController_.getTarget(); }
+
+bool Heater::isAtTarget() const { return pidController_.isAtTarget(); }
 
 void Heater::onLoop() { pidController_.onLoop(); }
 

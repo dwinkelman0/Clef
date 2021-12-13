@@ -23,11 +23,13 @@ Clef::Fw::TemperatureSensor needleTemperatureSensor(clock, 10e3, 7.4e3);
 Clef::Fw::Heater syringeHeater(syringeTemperatureSensor,
                                Clef::Impl::Atmega2560::timer2,
                                &Clef::If::DirectOutputPwmTimer::setDutyCycleA,
-                               0.01f, 0.002f, 0.0f);
+                               /* P */ 6.0f, /* I */ 0.002f, /* D */ 0.0f);
 Clef::Fw::Heater needleHeater(needleTemperatureSensor,
                               Clef::Impl::Atmega2560::timer2,
                               &Clef::If::DirectOutputPwmTimer::setDutyCycleB,
-                              0.01f, 0.002f, 0.0f);
+                              /* P */ 0.12f * 0.45f,
+                              /* I */ 0.12f * 0.01f,
+                              /* D */ 0.0f);
 Clef::Fw::ActionQueue actionQueue;
 Clef::Fw::XYEPositionQueue xyePositionQueue;
 Clef::Fw::GcodeParser gcodeParser;
@@ -102,6 +104,8 @@ void checkSensors(const uint8_t displacementSensorToken,
     float pressure = pressureSensor.readPressure();
     float syringeTemp = syringeTemperatureSensor.read().data;
     float needleTemp = needleTemperatureSensor.read().data;
+    float syringeTargetTemp = syringeHeater.getTarget();
+    float needleTargetTemp = needleHeater.getTarget();
     Clef::Util::TimeUsecs time = displacementSensor.getMeasurementTime();
     char buffer[64];
 
@@ -116,7 +120,11 @@ void checkSensors(const uint8_t displacementSensorToken,
     Clef::Impl::Atmega2560::serial1.writeStr(buffer);
     sprintf(buffer, ",Ts=%ld", static_cast<int32_t>(syringeTemp * 100));
     Clef::Impl::Atmega2560::serial1.writeStr(buffer);
+    sprintf(buffer, ",Tts=%ld", static_cast<int32_t>(syringeTargetTemp * 100));
+    Clef::Impl::Atmega2560::serial1.writeStr(buffer);
     sprintf(buffer, ",Tn=%ld", static_cast<int32_t>(needleTemp * 100));
+    Clef::Impl::Atmega2560::serial1.writeStr(buffer);
+    sprintf(buffer, ",Ttn=%ld", static_cast<int32_t>(needleTargetTemp * 100));
     Clef::Impl::Atmega2560::serial1.writeLine(buffer);
 
     needleTemperatureSensor.release(needleTemperatureSensorToken);

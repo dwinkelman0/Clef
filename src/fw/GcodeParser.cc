@@ -128,6 +128,8 @@ bool GcodeParser::interpret(Context &context, const uint16_t errorBufferSize,
     switch (mcode) {
       case 104:
         return handleM104(context, errorBufferSize, errorBuffer);
+      case 116:
+        return handleM116(context, errorBufferSize, errorBuffer);
       default:
         snprintf(errorBuffer, errorBufferSize, "%s: %d",
                  Str::INVALID_M_CODE_ERROR);
@@ -330,12 +332,29 @@ bool GcodeParser::handleM104(Context &context, const uint16_t errorBufferSize,
     Action::SetTemp action(context.actionQueue.getEndPosition(),
                            &context.axes.getE().getSyringeHeater(), s);
     context.actionQueue.push(context, action);
+    context.serial.writeLine(";set syringe temp");
   }
   if (!hasA || a == 1) {
     Action::SetTemp action(context.actionQueue.getEndPosition(),
                            &context.axes.getE().getNeedleHeater(), s);
     context.actionQueue.push(context, action);
+    context.serial.writeLine(";set needle temp");
   }
+  return true;
+}
+
+bool GcodeParser::handleM116(Context &context, const uint16_t errorBufferSize,
+                             char *const errorBuffer) {
+  if (context.actionQueue.getCapacityFor(Action::Type::WAIT_FOR) < 1) {
+    snprintf(errorBuffer, errorBufferSize, "%s",
+             Str::INSUFFICIENT_QUEUE_CAPACITY_ERROR);
+    return false;
+  }
+  Action::WaitFor action(context.actionQueue.getEndPosition(),
+                         Action::WaitFor::temperaturesHaveReachedTargets,
+                         &context);
+  context.actionQueue.push(context, action);
+  context.serial.writeLine(";wait for temps");
   return true;
 }
 }  // namespace Clef::Fw

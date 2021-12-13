@@ -108,6 +108,9 @@ class GcodeParser {
   bool handleM104(Context &context, const uint16_t errorBufferSize,
                   char *const errorBuffer);
 
+  bool handleM116(Context &context, const uint16_t errorBufferSize,
+                  char *const errorBuffer);
+
  private:
   static const uint16_t size_ = 80; /*!< Static size instead of templating. */
   char buffer_[size_]; /*!< Accumulate characters until a line is complete. */

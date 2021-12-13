@@ -24,6 +24,7 @@ class PidController {
   void onLoop();
   void setTarget(const float target);
   float getTarget() const;
+  bool isAtTarget() const;
 
  private:
   Sensor<float> &sensor_;
