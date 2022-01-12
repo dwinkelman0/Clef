@@ -45,6 +45,7 @@ def collect(dirname, port, baud, runtime, dumpToStdout, formats):
         while (runtime > 0 and time.time() < (t0 + runtime)) or runtime == 0:
             message = ser.readline().decode("utf-8").rstrip()
             if message == ";power_on":
+                lastTime = 0
                 print("Detected \";power_on\"")
                 data = {}
                 continue
