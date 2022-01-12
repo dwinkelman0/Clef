@@ -11,6 +11,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output", type=str, required=True)
+parser.add_argument("--delay", type=int, default=5)
 subparsers = parser.add_subparsers(dest="command")
 
 extrude_parser = subparsers.add_parser("extrude")
@@ -69,5 +70,6 @@ if __name__ == "__main__":
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     with open(fname, "w") as outputFile:
+        outputFile.write("M137 S{}\n".format(args.delay))
         for line in output:
             outputFile.write(line + "\n")
