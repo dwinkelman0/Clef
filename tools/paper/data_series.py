@@ -6,6 +6,12 @@ import numpy as np
 import re
 
 
+def interp(*arrays):
+    ts = np.concatenate([array[:, 0] for array in arrays])
+    ts.sort()
+    ts = np.unique(ts)
+    return (ts,) + tuple((np.interp(ts, array[:, 0], array[:, 1]) for array in arrays))
+
 class DataSeries:
     FILENAME_RE = re.compile("([a-zA-Z]+)-vs-[a-zA-Z]+\.npy")
 
@@ -13,10 +19,23 @@ class DataSeries:
         self.data = data
         self.range = (None, None)
 
+    def __sub__(self, other):
+        assert type(other) == type(self)
+        ts, thisData, otherData = interp(self.data, other.data)
+        return DataSeries(np.column_stack((ts, thisData - otherData)))
+    
+    def join(self, other):
+        assert type(other) == type(self)
+        ts, thisData, otherData = interp(self.data, other.data)
+        return DataSeries(np.column_stack((thisData, otherData)))
+
     def fromFile(fileName):
         data = np.array(np.load(fileName), dtype=np.float)
         data[:, 0] /= 1e6
         return DataSeries(data)
+
+    def getStartToEndDifference(self):
+        return self.data[-1, 1] - self.data[0, 1]
 
     def selectRange(self, start, end):
         if start is not None and end is not None:
@@ -41,13 +60,23 @@ class DataSeries:
             print("Removing {} outliers".format(sum(mask)))
         return DataSeries(self.data[~mask])
 
-    def normalize(self):
+    def normalizeToUnit(self):
         minValue = min(self.data[:, 1])
         maxValue = max(self.data[:, 1])
         assert minValue < maxValue
         newCol = (self.data[:, 1] - minValue) / (maxValue - minValue)
         return DataSeries(np.column_stack((self.data[:, 0], newCol)))
 
+    def normalizeToStart(self):
+        startValue = self.data[0, 1]
+        return DataSeries(np.column_stack((self.data[:, 0], self.data[:, 1] - startValue)))
+
+    def normalizeToStartAndEnd(self, scale):
+        startValue = self.data[0, 1]
+        endValue = self.data[-1, 1]
+        assert startValue != endValue
+        newCol = (self.data[:, 1] - startValue) / (endValue - startValue) * abs(scale)
+        return DataSeries(np.column_stack((self.data[:, 0], newCol)))
+
     def plot(self, ax, label):
-        ax.plot(self.data[:, 0], self.data[:, 1], label=label)
-        ax.set_xlabel("Time (s)")
+        ax.plot(self.data[:, 0], self.data[:, 1], ".", label=label)

@@ -64,10 +64,10 @@ if __name__ == "__main__":
             P = dataSeriesDict["P"]
             m = dataSeriesDict["m"]
             fig, ax = plt.subplots(1, 1)
-            xe.normalize().plot(ax, "xe")
-            xs.normalize().plot(ax, "xs")
-            P.normalize().plot(ax, "P")
-            m.normalize().plot(ax, "m")
+            xe.normalizeToUnit().plot(ax, "xe")
+            xs.normalizeToUnit().plot(ax, "xs")
+            P.normalizeToUnit().plot(ax, "P")
+            m.normalizeToUnit().plot(ax, "m")
             ax.legend()
             plt.show()
 
