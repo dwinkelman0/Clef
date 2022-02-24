@@ -4,6 +4,7 @@
 
 import numpy as np
 import re
+import scipy.optimize as opt
 
 
 def interp(*arrays):
@@ -13,6 +14,7 @@ def interp(*arrays):
     return (ts,) + tuple((np.interp(ts, array[:, 0], array[:, 1]) for array in arrays))
 
 class DataSeries:
+    DATA_FOLDER_RE = re.compile("(.*/)?n\d+-[\w\.]+-\w+-\d+f")
     FILENAME_RE = re.compile("([a-zA-Z]+)-vs-[a-zA-Z]+\.npy")
 
     def __init__(self, data):
@@ -33,6 +35,12 @@ class DataSeries:
         data = np.array(np.load(fileName), dtype=np.float)
         data[:, 0] /= 1e6
         return DataSeries(data)
+
+    def fromRegressionParameters(self, params):
+        x0, y0, alpha = params
+        print(params)
+        ts = self.data[:, 0]
+        return DataSeries(np.column_stack((ts, -y0 * np.exp(alpha * (ts - x0)) + y0)))
 
     def getStartToEndDifference(self):
         return self.data[-1, 1] - self.data[0, 1]
@@ -56,8 +64,6 @@ class DataSeries:
             return
         comparison = abs(self.data[1:, 1] - self.data[:-1, 1]) > (0.05 * diff)
         mask = np.concatenate(([False], comparison)) & np.concatenate((comparison, [False]))
-        if sum(mask) > 0:
-            print("Removing {} outliers".format(sum(mask)))
         return DataSeries(self.data[~mask])
 
     def normalizeToUnit(self):
@@ -78,5 +84,26 @@ class DataSeries:
         newCol = (self.data[:, 1] - startValue) / (endValue - startValue) * abs(scale)
         return DataSeries(np.column_stack((self.data[:, 0], newCol)))
 
-    def plot(self, ax, label):
-        ax.plot(self.data[:, 0], self.data[:, 1], ".", label=label)
+    def performExponentialRegression(self, guess):
+        minTime = min(self.data[:, 0])
+        def eq(x, *coefs):
+            y0, alpha = coefs
+            return -y0 * np.exp(alpha * (x - minTime)) + y0
+        params = opt.curve_fit(eq, self.data[:, 0], self.data[:, 1], guess)[0]
+        return minTime, *params
+
+    def plot(self, ax, label, style="."):
+        ax.plot(self.data[:, 0], self.data[:, 1], style, label=label)
+
+
+def clusterExperimentDict(experimentDict):
+    output = {}
+    for key, value in experimentDict.items():
+        if DataSeries.DATA_FOLDER_RE.match(key) is not None:
+            name = (key.split("/")[-1]).split("-")[1]
+            nameList = output.get(name, [])
+            nameList.append(value)
+            output[name] = nameList
+        else:
+            print("Could not cluster \"{}\"".format(key))
+    return output
