@@ -13,6 +13,7 @@ def interp(*arrays):
     ts = np.unique(ts)
     return (ts,) + tuple((np.interp(ts, array[:, 0], array[:, 1]) for array in arrays))
 
+
 class DataSeries:
     DATA_FOLDER_RE = re.compile("(.*/)?n\d+-[\w\.]+-\w+-\d+f")
     FILENAME_RE = re.compile("([a-zA-Z]+)-vs-[a-zA-Z]+\.npy")
@@ -25,7 +26,7 @@ class DataSeries:
         assert type(other) == type(self)
         ts, thisData, otherData = interp(self.data, other.data)
         return DataSeries(np.column_stack((ts, thisData - otherData)))
-    
+
     def join(self, other):
         assert type(other) == type(self)
         ts, thisData, otherData = interp(self.data, other.data)
@@ -63,7 +64,8 @@ class DataSeries:
         if diff == 0:
             return
         comparison = abs(self.data[1:, 1] - self.data[:-1, 1]) > (0.05 * diff)
-        mask = np.concatenate(([False], comparison)) & np.concatenate((comparison, [False]))
+        mask = np.concatenate(([False], comparison)) & np.concatenate(
+            (comparison, [False]))
         return DataSeries(self.data[~mask])
 
     def normalizeToUnit(self):
@@ -81,11 +83,13 @@ class DataSeries:
         startValue = self.data[0, 1]
         endValue = self.data[-1, 1]
         assert startValue != endValue
-        newCol = (self.data[:, 1] - startValue) / (endValue - startValue) * abs(scale)
+        newCol = (self.data[:, 1] - startValue) / \
+            (endValue - startValue) * abs(scale)
         return DataSeries(np.column_stack((self.data[:, 0], newCol)))
 
     def performExponentialRegression(self, guess):
         minTime = min(self.data[:, 0])
+
         def eq(x, *coefs):
             y0, alpha = coefs
             return -y0 * np.exp(alpha * (x - minTime)) + y0
@@ -96,11 +100,14 @@ class DataSeries:
         ax.plot(self.data[:, 0], self.data[:, 1], style, label=label)
 
 
-def clusterExperimentDict(experimentDict):
+def clusterExperimentDict(experimentDict, useFeedrate=False):
     output = {}
     for key, value in experimentDict.items():
         if DataSeries.DATA_FOLDER_RE.match(key) is not None:
             name = (key.split("/")[-1]).split("-")[1]
+            feedrate = (key.split("/")[-1]).split("-")[3]
+            if useFeedrate:
+                name = "{}-{}".format(name, feedrate)
             nameList = output.get(name, [])
             nameList.append(value)
             output[name] = nameList

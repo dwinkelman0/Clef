@@ -23,12 +23,12 @@ def calculateShearThinningJointExp(t, xs, P, guess):
     PRange = max(P) - min(P)
 
     def eq(t, *params):
-        #t, xs, P = independentVars
+        # t, xs, P = independentVars
         A, B, T, K12, K3, n = params
         xsEst = A * (1 - np.exp(T * (t - minTime)) + B * (t - minTime))
         vsEst = A * (-T * np.exp(T * (t - minTime)) + B)
-        #PEst = (K12 * (vsEst)) ** n
-        #PEst -= PEst[0]
+        # PEst = (K12 * (vsEst)) ** n
+        # PEst -= PEst[0]
         # return (((xsEst - xs) / xsRange)**2 + ((PEst - P) / PRange)**2)**0.5
         return (xsEst - xs) / xsRange
     params = opt.curve_fit(eq, t, np.zeros(t.shape), guess, bounds=((0, 0, float(
@@ -47,6 +47,14 @@ def calculateShearThinningExp(t, data, guess, addLine):
     return (*params, minTime), eq
 
 
+def calculateShearThinningParams(n, alpha, guess):
+    def eq(n, *params):
+        K12, K3 = params
+        return K12 * K3**(n-1)
+    params = opt.curve_fit(eq, n, alpha, guess)[0]
+    return params, eq
+
+
 if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
 
@@ -61,6 +69,8 @@ if __name__ == "__main__":
 
     nLine = {}
     nNoLine = {}
+    alphaNoLine = {}
+    nAndAlphaNoLine = {}
     bLine = {}
     for key, metadata in metadataDict.items():
         dataSeriesDict = metadata.loadData({"xe", "xs", "P", "m"})
@@ -103,7 +113,13 @@ if __name__ == "__main__":
             # DataSeries(np.column_stack(
             #     (pressureTail.data[:, 0], pressureEq(pressureTail.data[:, 0], *pressureParams[:3])))).plot(axs[0][1], "pressure_fit", "--")
             print(pressureParamsLine)
-            nNoLine[key] = pressureParamsNoLine[2] / xsParamsNoLine[2]
+            A, B, T, Tmin = pressureParamsNoLine
+            n = pressureParamsNoLine[2] / xsParamsNoLine[2]
+            Kp = pressureParamsNoLine[0]
+            alpha = Kp / (A * T)**n
+            nNoLine[key] = n
+            alphaNoLine[key] = -alpha
+            nAndAlphaNoLine[key] = (n, -alpha)
             nLine[key] = pressureParamsLine[2] / xsParamsLine[2]
             bLine[key] = pressureParamsLine[1] / xsParamsLine[1]
             # axs[0][1].set_xlabel("Time (s)")
@@ -126,6 +142,7 @@ if __name__ == "__main__":
         print("{}: {}".format(name, data))
 
     # Plot n data
+    nFinal = {}
     fig, axs = plt.subplots(3, 1)
     for col, (data, label, color) in enumerate([(nNoLine, "Simple Exponential", "blue"), (nLine, "Linear Exponential", "orange")]):
         for row, (name, fancy) in enumerate([("alg2.5", "Alginate 2.5%"), ("alg5", "Alginate 5%"), ("gelma10", "Gelma 10%")]):
@@ -133,10 +150,12 @@ if __name__ == "__main__":
             meanX = [xi for xi in x if 0.8 <= xi and xi <= 1.6]
             mean = sum(meanX) / len(meanX)
             stddev = (sum([(xi - mean)**2 for xi in meanX]) / len(meanX))**0.5
-            axs[row].plot([mean], [1.1 - col * 0.2], color=color, marker="o")
+            if col == 0:
+                nFinal[name] = (mean, stddev)
+            axs[row].plot([mean], [1.15 - col * 0.3], color=color, marker="o")
             axs[row].plot([mean - stddev, mean + stddev],
-                          [1.1 - col * 0.2] * 2, color=color, linestyle="-")
-            axs[row].plot(x, [1.1 - col * 0.2] * len(x),
+                          [1.15 - col * 0.3] * 2, color=color, linestyle="-")
+            axs[row].plot(x, [1.15 - col * 0.3] * len(x),
                           color=color, marker="x", linestyle='', label=label)
             axs[row].get_yaxis().set_visible(False)
             axs[row].set_xlim([0.8, 1.6])
@@ -147,6 +166,21 @@ if __name__ == "__main__":
                 axs[row].set_xlabel("Shear Thinning Constant ($n$)")
     plt.tight_layout()
     plt.savefig("figs/n_plot_v1.png")
+
+    print(nFinal)
+
+    # Plot alpha data
+    fig, ax = plt.subplots(1, 1)
+    for row, (name, fancy) in enumerate([("alg2.5", "Alginate 2.5%"), ("alg5", "Alginate 5%"), ("gelma10", "Gelma 10%"), ]):
+        x = clusterExperimentDict(nAndAlphaNoLine, False)[name]
+        n = [a for a, b in x]
+        alpha = [b for a, b in x]
+        params, eq = calculateShearThinningParams(n, alpha, (10, 0.8))
+        ax.plot(n, alpha, marker="x", linestyle='')
+        ax.plot(np.linspace(0.7, 1.5), eq(np.linspace(0.7, 1.5), *params))
+        ax.set_xlim([0.7, 1.5])
+    plt.tight_layout()
+    plt.savefig("figs/alpha_plot_v1.png")
 
     # Plot the two extrusion profiles
     fig, ax = plt.subplots(1, 1)
@@ -164,3 +198,30 @@ if __name__ == "__main__":
     ax.legend()
     plt.tight_layout()
     plt.savefig("figs/xe_plot_v1.png")
+
+    # Plot example extrusion experiments
+    fig, axs = plt.subplots(2, 2)
+    for col, (name, feedrate) in enumerate([("exp-data-6/n11-gelma10-10-100f", 100), ("exp-data-6/n12-gelma10-10-300f", 300)]):
+        data = metadataDict[name].loadData({"xe", "xs", "P"})
+        axs[0][col].plot(data["xe"].data[:, 0],
+                         data["xe"].normalizeToStartAndEnd(4.4).data[:, 1], color="blue", linestyle="--", label="Stepper Disp. ($x_e$)")
+        axs[0][col].plot(data["xs"].data[:, 0],
+                         data["xs"].normalizeToStartAndEnd(4.4).data[:, 1], color="orange", linestyle="-", label="Plunger Disp. ($x_s$)")
+        axs[0][col].set_xlim([6, 150])
+        axs[1][col].plot(data["P"].data[:, 0],
+                         data["P"].data[:, 1] / 1024 * 150, color="blue", label="Pressure ($P$)")
+        axs[1][col].set_xlim([6, 150])
+        axs[1][col].set_ylim([25, 65])
+        axs[1][col].set_xlabel("Time (seconds)")
+        axs[0][col].axvline(x=metadataDict[name].extrusionEnd,
+                            color="black", linestyle="--")
+        axs[1][col].axvline(x=metadataDict[name].extrusionEnd,
+                            color="black", linestyle="--")
+    axs[0][0].set_title("Gelma 10%, F = 100")
+    axs[0][1].set_title("Gelma 10%, F = 300")
+    axs[0][1].legend()
+    axs[1][1].legend()
+    axs[0][0].set_ylabel("Displacement (mL)")
+    axs[1][0].set_ylabel("Pressure (psi)")
+    plt.tight_layout()
+    plt.savefig("figs/exs_v1.png")
