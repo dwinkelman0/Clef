@@ -96,6 +96,12 @@ class DataSeries:
         params = opt.curve_fit(eq, self.data[:, 0], self.data[:, 1], guess)[0]
         return minTime, *params
 
+    def linearFit(self, guess):
+        def eq(x, *params):
+            m, b = params
+            return m * x + b
+        return opt.curve_fit(eq, self.data[:, 0], self.data[:, 1], guess)[0]
+
     def plot(self, ax, label, style="."):
         ax.plot(self.data[:, 0], self.data[:, 1], style, label=label)
 
